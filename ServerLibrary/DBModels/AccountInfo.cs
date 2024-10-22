@@ -623,7 +623,7 @@ namespace Server.DBModels
         protected override void OnCreated()
         {
             base.OnCreated();
-
+            Activated = true;
             StorageSize = Globals.StorageSize;
 
             BuffInfo buff = SEnvir.BuffInfoList.CreateNewObject();
