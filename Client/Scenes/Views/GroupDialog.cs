@@ -58,7 +58,7 @@ namespace Client.Scenes.Views
         public DXTab MemberTab;
 
         public List<ClientPlayerInfo> Members = new List<ClientPlayerInfo>();
-        
+
         public List<DXLabel> Labels = new List<DXLabel>();
 
         #region SelectedLabel
@@ -197,6 +197,8 @@ namespace Client.Scenes.Views
                 Parent = this,
                 Index = 15,
                 LibraryFile = LibraryFile.Interface,
+                Hint = CEnvir.Language.CommonControlClose,
+                HintPosition = HintPosition.TopLeft
             };
             CloseButton.Location = new Point(240 - CloseButton.Size.Width - 3, 3);
             CloseButton.MouseClick += (o, e) => Visible = false;
@@ -298,7 +300,7 @@ namespace Client.Scenes.Views
 
         private void GroupDialog_VisibleChanged(object sender, EventArgs e)
         {
-            
+
         }
 
         #region Methods
@@ -318,7 +320,7 @@ namespace Client.Scenes.Views
                 DXLabel label = new DXLabel
                 {
                     Parent = MemberTab,
-                    Location = new Point(10 + 100*(i%2), 5 + 20*(i/2)),
+                    Location = new Point(10 + 100 * (i % 2), 5 + 20 * (i / 2)),
                     Text = member.Name,
                     ForeColour = Color.White
                 };
@@ -333,7 +335,14 @@ namespace Client.Scenes.Views
 
                         if (!GameScene.Game.DataDictionary.TryGetValue(member.ObjectID, out ClientObjectData data)) return;
 
-                        GameScene.Game.BigMapBox.SelectedInfo = Globals.MapInfoList.Binding.FirstOrDefault(x => x.Index == data.MapIndex);
+                        var map = Globals.MapInfoList.Binding.FirstOrDefault(x => x.Index == data.MapIndex);
+
+                        if (!GameScene.Game.BigMapBox.TryShowMap(map))
+                        {
+                            return;
+                        }
+
+                        GameScene.Game.BigMapBox.SelectedInfo = map;
                     }
                 };
 
@@ -380,7 +389,7 @@ namespace Client.Scenes.Views
 
                     AllowGroupBox = null;
                 }
-                
+
                 if (AddButton != null)
                 {
                     if (!AddButton.IsDisposed)
@@ -541,5 +550,44 @@ namespace Client.Scenes.Views
                 index++;
             }
         }
+
+        #region IDisposable
+
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+
+            if (!disposing) return;
+
+            if (Labels != null)
+            {
+                foreach (DXLabel label in Labels)
+                {
+                    if (label == null) continue;
+                    if (label.IsDisposed) continue;
+
+                    label.Dispose();
+                }
+
+                Labels.Clear();
+                Labels = null;
+            }
+
+            if (HealthBars != null)
+            {
+                foreach (DXControl healthBar in HealthBars)
+                {
+                    if (healthBar == null) continue;
+                    if (healthBar.IsDisposed) continue;
+
+                    healthBar.Dispose();
+                }
+
+                HealthBars.Clear();
+                HealthBars = null;
+            }
+        }
+
+        #endregion
     }
 }

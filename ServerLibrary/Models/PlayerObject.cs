@@ -1,8 +1,10 @@
 ﻿using Library;
 using Library.Network;
+using Library.Network.ClientPackets;
 using Library.SystemModels;
 using Server.DBModels;
 using Server.Envir;
+using Server.Envir.Events.Triggers;
 using Server.Models.Magics;
 using Server.Models.Monsters;
 using System;
@@ -143,7 +145,7 @@ namespace Server.Models
         public HashSet<MonsterObject> TaggedMonsters = new HashSet<MonsterObject>();
         public HashSet<MapObject> NearByObjects = new HashSet<MapObject>();
 
-        public UserItem[] 
+        public UserItem[]
             Inventory = new UserItem[Globals.InventorySize],
             Equipment = new UserItem[Globals.EquipmentSize],
             Storage = new UserItem[1000],
@@ -194,7 +196,7 @@ namespace Server.Models
                     PartsStorage[item.Slot - Globals.PartsStorageOffset] = item;
                     continue;
                 }
-                
+
                 Storage[item.Slot] = item;
             }
 
@@ -221,8 +223,9 @@ namespace Server.Models
 
             if (Character.Account.Admin || Character.Account.TempAdmin)
             {
-                GameMaster = true;
-                Observer = true;
+                GameMaster = Config.AdminStartInGamemasterMode;
+                Observer = Config.AdminStartInObserverMode;
+                Superman = Config.AdminStartInSupermanMode;
             }
 
             FiltersClass = Character.FiltersClass ?? "";
@@ -283,6 +286,8 @@ namespace Server.Models
                 }
             }
         }
+
+        #region Process
 
         public override void Process()
         {
@@ -375,7 +380,7 @@ namespace Server.Models
                 case ActionType.DelayAttack:
                     Attack((MapObject)action.Data[0], (List<MagicType>)action.Data[1], (bool)action.Data[2], (int)action.Data[3]);
                     return;
-                case ActionType.DelayMagic:            
+                case ActionType.DelayMagic:
                     {
                         type = (MagicType)action.Data[0];
 
@@ -401,7 +406,7 @@ namespace Server.Models
                         if (!CanAttackTarget(ob)) return;
 
                         MagicAttack((List<MagicType>)action.Data[0], ob, (bool)action.Data[2], (Stats)action.Data[3], (int)action.Data[4]);
-                    }                 
+                    }
                     return;
                 case ActionType.Mount:
                     PacketWaiting = false;
@@ -678,10 +683,10 @@ namespace Server.Models
 
             DailyQuestTime = SEnvir.Now.AddSeconds(20);
 
-            bool cancel = false;
-
             for (int i = Character.Quests.Count - 1; i >= 0; i--)
             {
+                bool cancel = false;
+
                 var quest = Character.Quests[i];
 
                 switch (quest.QuestInfo.QuestType)
@@ -699,7 +704,7 @@ namespace Server.Models
                         {
                             CultureInfo cul = CultureInfo.CurrentCulture;
 
-                            if (quest.Completed && 
+                            if (quest.Completed &&
                                 cul.Calendar.GetWeekOfYear(quest.DateCompleted.Date, CalendarWeekRule.FirstDay, DayOfWeek.Monday) != cul.Calendar.GetWeekOfYear(DateTime.UtcNow.Date, CalendarWeekRule.FirstDay, DayOfWeek.Monday))
                             {
                                 Character.Quests.RemoveAt(i);
@@ -750,7 +755,9 @@ namespace Server.Models
             else if (Stats[Stat.PKPoint] >= 50)
                 NameColour = Color.Yellow;
         }
-        
+
+        #endregion
+
         private StartInformation GetStartInformation(bool observer = false)
         {
             List<ClientBeltLink> blinks = new List<ClientBeltLink>();
@@ -881,7 +888,17 @@ namespace Server.Models
                 {
                     return;
                 }
-                else if (Spawn(Character.BindPoint.BindRegion, null, 0))
+
+                if (Character.CurrentMap.ReconnectMap != null)
+                {
+                    var reconnectMap = SEnvir.GetMap(Character.CurrentMap.ReconnectMap);
+                    if (Spawn(reconnectMap, reconnectMap.GetRandomLocation()))
+                    {
+                        return;
+                    }
+                }
+
+                if (Spawn(Character.BindPoint.BindRegion, null, 0))
                 {
                     return;
                 }
@@ -929,6 +946,9 @@ namespace Server.Models
             BuffRemove(BuffType.Veteran);
             BuffRemove(BuffType.ElementalHurricane);
             BuffRemove(BuffType.SuperiorMagicShield);
+            BuffRemove(BuffType.ElementalSwords);
+
+            SEnvir.EventLogs.RemoveAll(x => x.PlayerIndex == Character.Index);
 
             if (GroupMembers != null) GroupLeave();
 
@@ -1333,7 +1353,13 @@ namespace Server.Models
                 RemoveMount();
 
             ApplyMapBuff();
+
+            if (PlayerMoveMap.QuickCheck(this))
+            {
+                SEnvir.EventHandler.Process(this, "PLAYERMOVEMAP");
+            }
         }
+
         protected override void OnLocationChanged()
         {
             base.OnLocationChanged();
@@ -1363,16 +1389,18 @@ namespace Server.Models
             }
             else if (Spawned && CurrentMap.Info.CanMine)
                 PauseBuffs();
+
+            if (PlayerMoverRegion.QuickCheck(this))
+            {
+                SEnvir.EventHandler.Process(this, "PLAYERMOVEREGION");
+            }
         }
+
         public override void OnDespawned()
         {
             base.OnDespawned();
 
             SEnvir.Players.Remove(this);
-        }
-        public override void OnSafeDespawn()
-        {
-            throw new NotImplementedException();
         }
 
         public override void CleanUp()
@@ -1845,8 +1873,7 @@ namespace Server.Models
 
             if (GetMagic(MagicType.CelestialLight, out CelestialLight celestialLight))
             {
-                celestialLight.Magic.Cooldown = SEnvir.Now.AddSeconds(6);
-                Enqueue(new S.MagicCooldown { InfoIndex = celestialLight.Magic.Info.Index, Delay = 6000 });
+                celestialLight.MagicCooldown(null, 6000);
             }
         }
 
@@ -2076,6 +2103,26 @@ namespace Server.Models
                     if (ele != Stat.None)
                         Stats[ele] += item.Stats.GetWeaponElementValue() + item.Info.Stats.GetWeaponElementValue();
                 }
+
+                if (item.Info.ItemEffect == ItemEffect.MagicRing)
+                {
+                    MagicInfo info = SEnvir.GetMagicInfo(item.Info.Shape);
+
+                    if (info != null && info.School != MagicSchool.None)
+                    {
+                        if (!GetMagic(info.Magic, out MagicObject magicObject))
+                        {
+                            var magic = SEnvir.UserMagicList.CreateNewObject();
+                            magic.Character = Character;
+                            magic.Info = info;
+                            magic.ItemRequired = true;
+
+                            magicObject = SetupMagic(magic);
+                            Enqueue(new S.NewMagic { Magic = magic.ToClientInfo() });
+                            Connection.ReceiveChatWithObservers(con => string.Format(con.Language.LearnBookSuccess, magic.Info.Name), MessageType.System);
+                        }
+                    }
+                }
             }
 
             if (GroupMembers != null && GroupMembers.Count >= 8)
@@ -2112,7 +2159,7 @@ namespace Server.Models
             {
                 var magicObject = MagicObjects[type];
 
-                if (Level < magicObject.Magic.Info.NeedLevel1) continue;
+                if (!magicObject.CanUseMagic()) continue;
 
                 Stats.Add(magicObject.GetPassiveStats());
             }
@@ -2242,7 +2289,12 @@ namespace Server.Models
             Stats[Stat.DropRate] += 20 * Stats[Stat.Rebirth];
             Stats[Stat.GoldRate] += 20 * Stats[Stat.Rebirth];
 
-            Enqueue(new S.StatsUpdate { Stats = Stats, HermitStats = Config.EnableHermit ? Character.HermitStats : new Stats(), HermitPoints = Math.Max(0, Level - 39 - Character.SpentPoints) });
+            Enqueue(new S.StatsUpdate
+            {
+                Stats = Stats,
+                HermitStats = Config.EnableHermit ? Character.HermitStats : new Stats(),
+                HermitPoints = Math.Max(0, Level - 39 - Character.SpentPoints)
+            });
 
             S.DataObjectMaxHealthMana p = new S.DataObjectMaxHealthMana { ObjectID = ObjectID, MaxHealth = Stats[Stat.Health], MaxMana = Stats[Stat.Mana] };
 
@@ -2575,6 +2627,8 @@ namespace Server.Models
             {
                 if (!Config.TestServer && Stats[Stat.TeleportRing] == 0) return;
 
+                if (CurrentMap.Instance != null && !CurrentMap.Instance.AllowTeleport) return;
+
                 if (!CurrentMap.Info.AllowRT || !CurrentMap.Info.AllowTT) return;
 
                 if (!destInfo.AllowRT || !destInfo.AllowTT) return;
@@ -2760,6 +2814,8 @@ namespace Server.Models
 
             if (ring == null || ring.Info.ItemType != ItemType.Ring) return;
 
+            if (!(CanWearItem(ring, EquipmentSlot.RingL) || CanWearItem(ring, EquipmentSlot.RingR))) return;
+
             ring.Flags |= UserItemFlags.Marriage;
 
             Inventory[index] = Equipment[(int)EquipmentSlot.RingL];
@@ -2824,6 +2880,18 @@ namespace Server.Models
                 return;
             }
 
+            if (Character.Partner.Player.CurrentMap.Instance != null && !Character.Partner.Player.CurrentMap.Instance.AllowTeleport)
+            {
+                Connection.ReceiveChatWithObservers(con => con.Language.MarryTeleportMap, MessageType.System);
+                return;
+            }
+
+            if (CurrentMap.Instance != null && !CurrentMap.Instance.AllowTeleport)
+            {
+                Connection.ReceiveChatWithObservers(con => con.Language.MarryTeleportMapEscape, MessageType.System);
+                return;
+            }
+
             if (!CurrentMap.Info.AllowTT)
             {
                 Connection.ReceiveChatWithObservers(con => con.Language.MarryTeleportMapEscape, MessageType.System);
@@ -2867,13 +2935,21 @@ namespace Server.Models
                 return;
             }
 
+            var unlockItem = info.UnlockItem;
+
+            unlockItem ??= SEnvir.ItemInfoList.Binding.FirstOrDefault(x => x.ItemEffect == ItemEffect.CompanionTicket);
+
+            if (unlockItem == null) 
+            { 
+                return; 
+            }
+
             UserItem item = null;
             int slot = 0;
 
             for (int i = 0; i < Inventory.Length; i++)
             {
-                if (Inventory[i] == null || Inventory[i].Info.ItemEffect != ItemEffect.CompanionTicket) continue;
-
+                if (Inventory[i] == null || Inventory[i].Info != unlockItem) continue;
 
                 item = Inventory[i];
                 slot = i;
@@ -2882,7 +2958,7 @@ namespace Server.Models
 
             if (item == null)
             {
-                Connection.ReceiveChatWithObservers(con => con.Language.CompanionNeedTicket, MessageType.System);
+                Connection.ReceiveChatWithObservers(con => con.Language.CompanionNeedItem, MessageType.System);
                 return;
             }
 
@@ -2933,9 +3009,11 @@ namespace Server.Models
                 return;
             }
 
-            if (info.Price > Gold.Amount)
+            var userCurrency = GetCurrency(info.Currency);
+
+            if (info.Price > userCurrency.Amount)
             {
-                Connection.ReceiveChatWithObservers(con => con.Language.CompanionNeedGold, MessageType.System);
+                Connection.ReceiveChatWithObservers(con => con.Language.CompanionNeedCurrency, MessageType.System);
                 return;
             }
 
@@ -2945,8 +3023,8 @@ namespace Server.Models
                 return;
             }
 
-            Gold.Amount -= info.Price;
-            GoldChanged();
+            userCurrency.Amount -= info.Price;
+            CurrencyChanged(userCurrency);
 
             UserCompanion companion = SEnvir.UserCompanionList.CreateNewObject();
 
@@ -2997,7 +3075,31 @@ namespace Server.Models
 
             CompanionDespawn();
             CompanionSpawn();
+        }
+        public void CompanionRelease(int index)
+        {
+            if (Dead || NPC == null || NPCPage == null) return;
 
+            if (NPCPage.DialogType != NPCDialogType.CompanionManage) return;
+
+            UserCompanion info = Character.Account.Companions.FirstOrDefault(x => x.Index == index);
+
+            if (info == null) return;
+
+            if (info.Character != null)
+            {
+                if (info.Character != Character)
+                {
+                    Connection.ReceiveChatWithObservers(con => string.Format(con.Language.CompanionReleaseFailed, info.Name, info.Character.CharacterName), MessageType.System);
+                    return;
+                }
+            }
+
+            Character.Account.Companions.Remove(info);
+
+            Enqueue(new S.CompanionRelease { Index = index });
+
+            CompanionDespawn();
         }
 
         public void CompanionStore(int index)
@@ -3021,15 +3123,14 @@ namespace Server.Models
 
             if (Character.Companion == null) return;
 
-            Companion tempCompanion = new Companion(Character.Companion)
+            Companion companion = new Companion(Character.Companion)
             {
                 CompanionOwner = this,
             };
 
-
-            if (tempCompanion.Spawn(CurrentMap, CurrentLocation))
+            if (companion.Spawn(CurrentMap, CurrentLocation))
             {
-                Companion = tempCompanion;
+                Companion = companion;
                 CompanionApplyBuff();
             }
         }
@@ -3141,7 +3242,7 @@ namespace Server.Models
                 else
                     userQuest.Character = Character;
 
-                userQuest.DateTaken = DateTime.UtcNow;
+                userQuest.DateTaken = SEnvir.Now;
 
                 Enqueue(new S.QuestChanged { Quest = userQuest.ToClientInfo() });
                 break;
@@ -3275,7 +3376,7 @@ namespace Server.Models
 
                 userQuest.Track = false;
                 userQuest.Completed = true;
-                userQuest.DateCompleted = DateTime.UtcNow;
+                userQuest.DateCompleted = SEnvir.Now;
 
                 if (hasChosen)
                     userQuest.SelectedReward = p.ChoiceIndex;
@@ -3352,7 +3453,8 @@ namespace Server.Models
             {
                 Enqueue(new S.MailDelete { Index = index, ObserverPacket = true });
                 return;
-            };
+            }
+            ;
 
             if (mail.Items.Count > 0)
             {
@@ -4635,7 +4737,7 @@ namespace Server.Models
             foreach (GuildMemberInfo member in Character.Account.GuildMember.Guild.Members)
                 member.Account.Connection?.Player?.Enqueue(update);
         }
-        
+
         public void GuildToggleCastleGates()
         {
             if (Character.Account.GuildMember == null) return;
@@ -5427,7 +5529,6 @@ namespace Server.Models
             foreach (UserQuest quest in changedQuests)
                 Enqueue(new S.QuestChanged { Quest = quest.ToClientInfo() });
 
-
             RefreshWeight();
         }
 
@@ -5547,11 +5648,18 @@ namespace Server.Models
 
                             if (item.Info.Stats[Stat.Experience] > 0) GainExperience(item.Info.Stats[Stat.Experience], false);
                             break;
-                        case 1:
+                        case 1: //Buff
                             if (!ItemBuffAdd(item.Info)) return;
                             break;
                         case 2: //Town Teleport
-                            if (!CurrentMap.Info.AllowTT || CurrentMap.Instance != null)
+
+                            if (CurrentMap.Instance != null && !CurrentMap.Instance.AllowTeleport)
+                            {
+                                Connection.ReceiveChatWithObservers(con => con.Language.CannotTownTeleport, MessageType.System);
+                                return;
+                            }
+
+                            if (!CurrentMap.Info.AllowTT)
                             {
                                 Connection.ReceiveChatWithObservers(con => con.Language.CannotTownTeleport, MessageType.System);
                                 return;
@@ -5702,6 +5810,7 @@ namespace Server.Models
                                     case PoisonType.Abyss:
                                     case PoisonType.Burn:
                                     case PoisonType.Containment:
+                                    case PoisonType.Binding:
                                         work = true;
                                         PoisonList.Remove(pois);
                                         break;
@@ -5870,7 +5979,7 @@ namespace Server.Models
                                     return;
                             }
                             break;
-                        case 17:
+                        case 17: //Storage Increase
 
                             int size = Character.Account.StorageSize + 10;
 
@@ -5883,7 +5992,7 @@ namespace Server.Models
                             Character.Account.StorageSize = size;
                             Enqueue(new S.StorageSize { Size = Character.Account.StorageSize });
                             break;
-                        case 18:
+                        case 18: //Football Whistle
                             if (item.Info.Stats[Stat.MapSummoning] > 0 && CurrentMap.HasSafeZone)
                             {
                                 Connection.ReceiveChat($"You cannot use [{item.Info.ItemName}] with maps that have a SafeZone.", MessageType.System);
@@ -5977,7 +6086,7 @@ namespace Server.Models
                                 }
                             }
                             break;
-                        case 19:
+                        case 19: //Stat Extractor [From Weapon] (All Added Stats)
                             if (Horse != HorseType.None) return;
                             weapon = Equipment[(int)EquipmentSlot.Weapon];
 
@@ -6047,7 +6156,7 @@ namespace Server.Models
                             RefreshStats();
 
                             break;
-                        case 20:
+                        case 20: //Stat Extractor [To Weapon] (All Added Stats)
                             if (Horse != HorseType.None) return;
                             weapon = Equipment[(int)EquipmentSlot.Weapon];
 
@@ -6094,7 +6203,7 @@ namespace Server.Models
                             Enqueue(new S.ItemStatsRefreshed { Slot = (int)EquipmentSlot.Weapon, GridType = GridType.Equipment, NewStats = new Stats(weapon.Stats) });
                             RefreshStats();
                             break;
-                        case 21:
+                        case 21: //Stat Extractor [From Weapon] (Refine Only)
                             if (Horse != HorseType.None) return;
                             weapon = Equipment[(int)EquipmentSlot.Weapon];
 
@@ -6169,7 +6278,7 @@ namespace Server.Models
                             RefreshStats();
 
                             break;
-                        case 22:
+                        case 22: //Stat Extractor [To Weapon] (Refine Only)
                             if (Horse != HorseType.None) return;
                             weapon = Equipment[(int)EquipmentSlot.Weapon];
 
@@ -6212,6 +6321,33 @@ namespace Server.Models
                             Enqueue(new S.ItemStatsRefreshed { Slot = (int)EquipmentSlot.Weapon, GridType = GridType.Equipment, NewStats = new Stats(weapon.Stats) });
                             RefreshStats();
                             break;
+                        case 23: //Instance cooldown reset
+                            {
+                                if (SEnvir.Now < UseItemTime) return;
+                                if (CurrentMap.Instance != null) return;
+
+                                var instances = SEnvir.InstanceInfoList.Binding;
+
+                                int resetCount = 0;
+
+                                foreach (var instance in SEnvir.InstanceInfoList.Binding)
+                                {
+                                    if (instance.UserCooldown.TryGetValue(Name, out var cooldown) && cooldown > SEnvir.Now)
+                                    {
+                                        instance.UserCooldown.Remove(Name);
+                                        resetCount++;
+                                    }
+                                }
+
+                                if (resetCount == 0)
+                                {
+                                    Connection.ReceiveChat("No instance cooldowns to reset.", MessageType.System);
+                                    return;
+                                }
+
+                                Connection.ReceiveChat("Cooldowns for all instances have been reset.", MessageType.System);
+                            }
+                            break;
                     }
 
                     if (item.Info.ItemEffect != ItemEffect.ElixirOfPurification || UseItemTime < SEnvir.Now)
@@ -6244,13 +6380,19 @@ namespace Server.Models
                 case ItemType.Book:
                     if (SEnvir.Now < UseItemTime || Horse != HorseType.None) return;
 
-                    MagicInfo info = SEnvir.MagicInfoList.Binding.First(x => x.Index == item.Info.Shape);
+                    MagicInfo info = SEnvir.GetMagicInfo(item.Info.Shape);
 
                     if (info.School == MagicSchool.None) return;
 
                     if (GetMagic(info.Magic, out MagicObject magicObject))
                     {
                         var magic = magicObject.Magic;
+
+                        if (magic.ItemRequired)
+                        {
+                            magic.ItemRequired = false;
+                            Enqueue(new S.NewMagic { Magic = magic.ToClientInfo() });
+                        }
 
                         if (magic.Level < 3) return;
 
@@ -6324,6 +6466,8 @@ namespace Server.Models
 
                     gainItem = SEnvir.CreateDropItem(partInfo, 2);
 
+                    break;
+                case ItemType.Bundle:
                     break;
                 default:
                     return;
@@ -6486,7 +6630,7 @@ namespace Server.Models
             switch (item.Info.ItemType)
             {
                 case ItemType.Book:
-                    MagicInfo magic = SEnvir.MagicInfoList.Binding.FirstOrDefault(x => x.Index == item.Info.Shape);
+                    MagicInfo magic = SEnvir.GetMagicInfo(item.Info.Shape);
                     if (magic == null) return false;
                     if (GetMagic(magic.Magic, out MagicObject magicObject) && (magicObject.Magic.Level < 3 || (item.Flags & UserItemFlags.NonRefinable) == UserItemFlags.NonRefinable)) return false;
                     return true;
@@ -6606,7 +6750,7 @@ namespace Server.Models
                         Connection.ReceiveChatWithObservers(con => con.Language.StorageSafeZone, MessageType.System);
                         return;
                     }
-                    
+
                     if (fromItem.Info.ItemEffect != ItemEffect.ItemPart) return;
 
                     toArray = PartsStorage;
@@ -7081,7 +7225,7 @@ namespace Server.Models
                 items.Add(item);
 
                 if (item.Info.StackSize <= 1) continue;
-                if (item.Count == item.Info.StackSize) continue; 
+                if (item.Count == item.Info.StackSize) continue;
 
                 var count = item.Count;
 
@@ -8570,9 +8714,9 @@ namespace Server.Models
             return true;
         }
 
-        public override BuffInfo BuffAdd(BuffType type, TimeSpan remainingTicks, Stats stats, bool visible, bool pause, TimeSpan tickRate)
+        public override BuffInfo BuffAdd(BuffType type, TimeSpan remainingTicks, Stats stats, bool visible, bool pause, TimeSpan tickRate, bool hidden = false, int extra = 0)
         {
-            BuffInfo info = base.BuffAdd(type, remainingTicks, stats, visible, pause, tickRate);
+            BuffInfo info = base.BuffAdd(type, remainingTicks, stats, visible, pause, tickRate, hidden, extra);
 
             info.Character = Character;
 
@@ -8583,7 +8727,12 @@ namespace Server.Models
                     break;
             }
 
-            Enqueue(new S.BuffAdd { Buff = info.ToClientInfo() });
+            info.Hidden = hidden;
+
+            if (!hidden)
+            {
+                Enqueue(new S.BuffAdd { Buff = info.ToClientInfo() });
+            }
 
             switch (type)
             {
@@ -8607,6 +8756,7 @@ namespace Server.Models
                 case BuffType.Castle:
                 case BuffType.ElementalHurricane:
                 case BuffType.SuperiorMagicShield:
+                case BuffType.ElementalSwords:
                     info.IsTemporary = true;
                     break;
             }
@@ -8620,7 +8770,10 @@ namespace Server.Models
 
             base.BuffRemove(info);
 
-            Enqueue(new S.BuffRemove { Index = info.Index });
+            if (!info.Hidden)
+            {
+                Enqueue(new S.BuffRemove { Index = info.Index });
+            }
 
             switch (info.Type)
             {
@@ -12746,7 +12899,7 @@ namespace Server.Models
                                     if (item.UserTask == null) continue;
 
                                     if (!item.UserTask.Completed &&
-                                        ((item.UserTask.Quest.Character != null && item.UserTask.Quest.Character == Character) || 
+                                        ((item.UserTask.Quest.Character != null && item.UserTask.Quest.Character == Character) ||
                                         (item.UserTask.Quest.Account != null && item.UserTask.Quest.Account == Character.Account))) continue;
 
                                     items.Remove(item);
@@ -12848,6 +13001,9 @@ namespace Server.Models
                 Horse = Character.Account.Horse;
             else
                 Horse = HorseType.None;
+
+            BuffRemove(BuffType.Cloak);
+            BuffRemove(BuffType.Transparency);
 
             Broadcast(new S.ObjectMount { ObjectID = ObjectID, Horse = Horse });
         }
@@ -13172,6 +13328,8 @@ namespace Server.Models
             ActionTime = SEnvir.Now + Globals.MoveTime;
             MoveTime = SEnvir.Now + Globals.MoveTime;
 
+            var previousCell = CurrentCell;
+
             PreventSpellCheck = true;
             CurrentCell = cell.GetMovement(this);
             PreventSpellCheck = false;
@@ -13190,6 +13348,7 @@ namespace Server.Models
             Broadcast(new S.ObjectMove { ObjectID = ObjectID, Direction = direction, Location = CurrentLocation, Slow = slow, Distance = distance });
             CheckSpellObjects();
         }
+
         public void Attack(MirDirection direction, MagicType attackMagic)
         {
             if (SEnvir.Now < ActionTime || SEnvir.Now < AttackTime)
@@ -13243,7 +13402,7 @@ namespace Server.Models
 
                 if (magicObject.AttackSkill)
                 {
-                    if (Level < magicObject.Magic.Info.NeedLevel1)
+                    if (!magicObject.CanUseMagic())
                     {
                         continue;
                     }
@@ -13268,7 +13427,7 @@ namespace Server.Models
 
             if (Equipment[(int)EquipmentSlot.Amulet]?.Info.ItemType == ItemType.DarkStone)
             {
-                element = Equipment[(int)EquipmentSlot.Amulet].Info.Stats.GetAffinityElement();             
+                element = Equipment[(int)EquipmentSlot.Amulet].Info.Stats.GetAffinityElement();
             }
 
             if (AttackLocation(Functions.Move(CurrentLocation, Direction), magics, true))
@@ -13363,8 +13522,7 @@ namespace Server.Models
 
             if (cast)
             {
-                Enqueue(new S.MagicCooldown { InfoIndex = magicObject.Magic.Info.Index, Delay = magicObject.Magic.Info.Delay });
-                magicObject.Magic.Cooldown = SEnvir.Now.AddMilliseconds(magicObject.Magic.Info.Delay);
+                magicObject.MagicCooldown();
             }
 
             Direction = ob == null || ob == this ? p.Direction : Functions.DirectionFromPoint(CurrentLocation, ob.CurrentLocation);
@@ -13647,7 +13805,7 @@ namespace Server.Models
 
             if (Equipment[(int)EquipmentSlot.Amulet]?.Info.ItemType == ItemType.DarkStone)
             {
-                element = Equipment[(int)EquipmentSlot.Amulet].Info.Stats.GetAffinityElement();      
+                element = Equipment[(int)EquipmentSlot.Amulet].Info.Stats.GetAffinityElement();
             }
 
             Broadcast(new S.ObjectRangeAttack
@@ -13657,15 +13815,14 @@ namespace Server.Models
                 Location = CurrentLocation,
                 AttackMagic = MagicType.Shuriken,
                 AttackElement = element,
-                Targets = new List<uint> { ob.ObjectID },
+                Targets = new List<uint> { ob.ObjectID }
             });
 
             ActionList.Add(new DelayedAction(SEnvir.Now.AddMilliseconds(delayTime), ActionType.DelayAttack, ob, new List<MagicType>() { MagicType.Shuriken }, true, 50));
 
-
             DamageItem(GridType.Equipment, (int)EquipmentSlot.Weapon);
-
         }
+
         public void Attack(MapObject ob, List<MagicType> types, bool primary, int extra)
         {
             if (ob?.Node == null || ob.Dead) return;
@@ -14021,7 +14178,7 @@ namespace Server.Models
                 {
                     Owner = this,
                     Type = PoisonType.Burn,
-                    Value = (damage * burnLevel) / 10,
+                    Value = damage * burnLevel / 10,
                     TickFrequency = TimeSpan.FromSeconds(2),
                     TickCount = burn,
                 });
@@ -14278,12 +14435,15 @@ namespace Server.Models
                 {
                     StruckTime = SEnvir.Now;
 
-                    if (Config.EnableStruck)
+                    if (!Buffs.Any(x => x.Type == BuffType.Dash))
                     {
-                        if (StruckTime.AddMilliseconds(300) > ActionTime) ActionTime = StruckTime.AddMilliseconds(300);
-                    }
+                        if (Config.EnableStruck)
+                        {
+                            if (StruckTime.AddMilliseconds(300) > ActionTime) ActionTime = StruckTime.AddMilliseconds(300);
+                        }
 
-                    Broadcast(new S.ObjectStruck { ObjectID = ObjectID, Direction = Direction, Location = CurrentLocation, AttackerID = attacker.ObjectID, Element = element });
+                        Broadcast(new S.ObjectStruck { ObjectID = ObjectID, Direction = Direction, Location = CurrentLocation, AttackerID = attacker.ObjectID, Element = element });
+                    }
 
                     bool update = false;
                     for (int i = 0; i < Equipment.Length; i++)
@@ -14544,7 +14704,7 @@ namespace Server.Models
         {
             var hasMagic = MagicObjects.TryGetValue(type, out var retrievedMagic);
 
-            if (hasMagic && Level >= retrievedMagic.Magic.Info.NeedLevel1)
+            if (hasMagic && retrievedMagic.CanUseMagic())
             {
                 magic = (T)retrievedMagic;
                 return true;
@@ -14670,6 +14830,8 @@ namespace Server.Models
 
             if (Buffs.Any(x => x.Type == BuffType.SoulResonance))
                 SoulResonance.Activate(this);
+
+            SEnvir.EventHandler.Process(this, "PLAYERDIE");
 
             #region Conquest Stats
 
@@ -15177,7 +15339,7 @@ namespace Server.Models
 
                 Poison = Poison,
 
-                Buffs = Character.Buffs.Where(x => x.Visible).Select(x => x.Type).ToList(),
+                Buffs = Character.Buffs.Where(x => x.Visible).Select(x => new KeyValuePair<BuffType, int>(x.Type, x.Extra)).ToDictionary(),
 
                 Horse = Horse,
 
@@ -15209,7 +15371,7 @@ namespace Server.Models
         }
 
         public void SendShapeUpdate()
-        {     
+        {
             S.PlayerUpdate p = new S.PlayerUpdate
             {
                 ObjectID = ObjectID,
@@ -15361,11 +15523,11 @@ namespace Server.Models
             Enqueue(joinResult);
         }
 
-        public (byte? index, InstanceResult result) GetInstance(InstanceInfo instance, bool checkOnly = false, bool dungeonFinder = false)
+        public (byte? index, InstanceResult result) GetInstance(InstanceInfo instance, bool checkOnly = false, bool dungeonFinder = false, bool walkOn = false)
         {
             var mapInstance = SEnvir.Instances[instance];
 
-            if (instance.ConnectRegion == null)
+            if (instance.ConnectRegion == null && !walkOn)
                 return (null, InstanceResult.ConnectRegionNotSet);
 
             if (instance.MinPlayerLevel > 0 && Level < instance.MinPlayerLevel || instance.MaxPlayerLevel > 0 && Level > instance.MaxPlayerLevel)
@@ -15379,7 +15541,7 @@ namespace Server.Models
 
             switch (instance.Type)
             {
-                case InstanceType.Solo:
+                case InstanceType.Player:
                     {
                         if (instance.UserCooldown.TryGetValue(Name, out DateTime cooldown))
                         {
@@ -15396,7 +15558,7 @@ namespace Server.Models
                                 return (instance.UserRecord[Name], InstanceResult.Success);
                         }
 
-                        for (int i = 0; i < mapInstance.Length; i++)
+                        for (byte i = 0; i < mapInstance.Length; i++)
                         {
                             if (CheckInstanceFreeSpace(instance, i))
                             {
@@ -15404,15 +15566,15 @@ namespace Server.Models
                                 {
                                     if (instance.UserRecord.ContainsKey(Name))
                                     {
-                                        instance.UserRecord[Name] = (byte)i;
+                                        instance.UserRecord[Name] = i;
                                     }
                                     else
                                     {
-                                        instance.UserRecord.Add(Name, (byte)i);
+                                        instance.UserRecord.Add(Name, i);
                                     }
                                 }
 
-                                return ((byte)i, InstanceResult.Success);
+                                return (i, InstanceResult.Success);
                             }
                         }
                     }
@@ -15536,11 +15698,11 @@ namespace Server.Models
             }
 
             byte? instanceSequence = null;
-            for (int i = 0; i < mapInstance.Length; i++)
+            for (byte i = 0; i < mapInstance.Length; i++)
             {
                 if (mapInstance[i] == null)
                 {
-                    instanceSequence = (byte)i;
+                    instanceSequence = i;
                     break;
                 }
             }
@@ -15841,6 +16003,494 @@ namespace Server.Models
             RefreshStats();
 
             Enqueue(new S.DisciplineUpdate { Discipline = uFocus.ToClientInfo() });
+        }
+
+        #endregion
+
+        #region Loot Boxes
+
+        public void LootBoxOpen(LootBoxOpen p)
+        {
+            if (p.Slot < 0 || p.Slot >= Inventory.Length) return;
+
+            UserItem item = Inventory[p.Slot];
+
+            if (item == null || item.Info.ItemType != ItemType.LootBox) return;
+
+            LootBoxUpdate(item, p.Slot);
+        }
+
+        public void LootBoxReroll(LootBoxReroll p)
+        {
+            if (p.Slot < 0 || p.Slot >= Inventory.Length) return;
+
+            UserItem item = Inventory[p.Slot];
+
+            if (item == null || item.Info.ItemType != ItemType.LootBox) return;
+
+            var lootBoxInfo = SEnvir.LootBoxInfoList.Binding.FirstOrDefault(x => x.Index == item.Info.Shape);
+            if (lootBoxInfo == null) return;
+
+            var remainingShuffles = item.Stats[Stat.Counter1];
+            if (remainingShuffles <= 0) return;
+
+            var state = item.Stats[Stat.Counter2];
+            if (state > 1) return; // Already confirmed 
+
+            var currency = GetCurrency(lootBoxInfo.Currency) ?? GameGold;
+
+            if (currency.Amount < Globals.LootBoxRerollCost) return;
+            currency.Amount -= Globals.LootBoxRerollCost;
+
+            CurrencyChanged(currency);
+
+            item.AddStat(Stat.Random1, SEnvir.Random.Next(byte.MaxValue), StatSource.Added);
+            item.AddStat(Stat.Counter1, -1, StatSource.Added);
+            item.StatsChanged();
+
+            Enqueue(new S.ItemStatsRefreshed
+            {
+                GridType = GridType.Inventory,
+                Slot = p.Slot,
+                NewStats = new Stats(item.Stats, true)
+            });
+
+            LootBoxUpdate(item, p.Slot);
+        }
+
+        public void LootBoxConfirmSelection(LootBoxConfirmSelection p)
+        {
+            if (p.Slot < 0 || p.Slot >= Inventory.Length) return;
+
+            UserItem item = Inventory[p.Slot];
+
+            if (item == null || item.Info.ItemType != ItemType.LootBox) return;
+
+            var lootBoxInfo = SEnvir.LootBoxInfoList.Binding.FirstOrDefault(x => x.Index == item.Info.Shape);
+            if (lootBoxInfo == null) return;
+
+            var state = item.Stats[Stat.Counter2];
+            if (state > 1) return; // Already confirmed 
+
+            item.AddStat(Stat.Counter2, 1, StatSource.Added);
+            item.StatsChanged();
+
+            Enqueue(new S.ItemStatsRefreshed
+            {
+                GridType = GridType.Inventory,
+                Slot = p.Slot,
+                NewStats = new Stats(item.Stats, true)
+            });
+
+            LootBoxUpdate(item, p.Slot);
+        }
+
+        public void LootBoxReveal(LootBoxReveal p)
+        {
+            if (p.Slot < 0 || p.Slot >= Inventory.Length) return;
+
+            UserItem item = Inventory[p.Slot];
+
+            if (item == null || item.Info.ItemType != ItemType.LootBox) return;
+
+            var lootBoxInfo = SEnvir.LootBoxInfoList.Binding.FirstOrDefault(x => x.Index == item.Info.Shape);
+            if (lootBoxInfo == null) return;
+
+            if (p.Choice < 0 || p.Choice >= LootBoxInfo.SlotSize) return;
+
+            var openCount = 0;
+
+            for (int i = 0; i < LootBoxInfo.SlotSize; i++)
+            {
+                if ((item.CurrentDurability & (1 << i)) != 0)
+                    openCount++;
+            }
+
+            var currency = GetCurrency(lootBoxInfo.Currency) ?? GameGold;
+
+            var totalCost = openCount * Globals.LootBoxRevealCost;
+
+            if (currency.Amount < totalCost) return;
+            currency.Amount -= totalCost;
+
+            CurrencyChanged(currency);
+
+            // Update durability to mark the slot as revealed
+            item.CurrentDurability |= (1 << p.Choice);
+
+            Enqueue(new S.ItemDurability
+            {
+                GridType = GridType.Inventory,
+                Slot = p.Slot,
+                CurrentDurability = item.CurrentDurability,
+            });
+
+            LootBoxUpdate(item, p.Slot);
+        }
+
+        private void LootBoxUpdate(UserItem item, int slot)
+        {
+            var lootBoxInfo = SEnvir.LootBoxInfoList.Binding.FirstOrDefault(x => x.Index == item.Info.Shape);
+            if (lootBoxInfo == null) return;
+
+            var lootBoxContents = lootBoxInfo.Contents.ToList();
+
+            // Shuffle the full list based on the random 1 seed
+            Functions.Shuffle(lootBoxContents, item.Stats[Stat.Random1]);
+
+            // Take the top selection based on slot amount
+            var taken = lootBoxContents.Take(LootBoxInfo.SlotSize).ToList();
+
+            // Calculate how many more items are needed to reach SlotSize
+            int itemsToAdd = LootBoxInfo.SlotSize - taken.Count;
+
+            // If more items are needed, pad the list with default values
+            if (itemsToAdd > 0)
+            {
+                taken.AddRange(Enumerable.Repeat(default(LootBoxItemInfo), itemsToAdd));
+            }
+
+            var items = new List<ClientLootBoxItemInfo>();
+
+            var lootBoxState = item.Stats[Stat.Counter2];
+
+            if (lootBoxState > 1) // Confirmed Choice
+            {
+                // Shuffle the taken list based on random 2 seed
+                Functions.Shuffle(taken, item.Stats[Stat.Random2]);
+
+                var lockState = item.CurrentDurability;
+
+                for (int i = 0; i < LootBoxInfo.SlotSize; i++)
+                {
+                    bool unlocked = (lockState & (1 << i)) != 0;
+
+                    if (unlocked)
+                    {
+                        var content = taken[i];
+
+                        if (content == default(LootBoxItemInfo))
+                        {
+                            items.Add(new ClientLootBoxItemInfo { ItemIndex = -1, Amount = 1, Slot = i });
+                        }
+                        else
+                        {
+                            items.Add(new ClientLootBoxItemInfo { ItemIndex = taken[i].Item.Index, Amount = taken[i].Amount, Slot = i });
+                        }
+                    }
+                }
+
+                Enqueue(new S.LootBoxOpen { Slot = slot, Items = items });
+            }
+            else
+            {
+                for (int i = 0; i < taken.Count; i++)
+                {
+                    items.Add(new ClientLootBoxItemInfo { ItemIndex = taken[i].Item.Index, Amount = taken[i].Amount, Slot = i });
+                }
+
+                Enqueue(new S.LootBoxOpen { Slot = slot, Items = items });
+            }
+        }
+
+        public void LootBoxConfirm(LootBoxTakeItems p)
+        {
+            if (p.Slot < 0 || p.Slot >= Inventory.Length) return;
+
+            UserItem item = Inventory[p.Slot];
+
+            if (item == null || item.Info.ItemType != ItemType.LootBox) return;
+
+            var lootBoxInfo = SEnvir.LootBoxInfoList.Binding.FirstOrDefault(x => x.Index == item.Info.Shape);
+            if (lootBoxInfo == null) return;
+
+            var lootBoxState = item.Stats[Stat.Counter2];
+            if (lootBoxState < 2) return; // Hasn't been confirmed yet
+
+            var lootBoxContents = lootBoxInfo.Contents.ToList();
+
+            // Shuffle the full list based on the random 1 seed
+            Functions.Shuffle(lootBoxContents, item.Stats[Stat.Random1]);
+
+            // Take the top selection based on slot amount
+            var taken = lootBoxContents.Take(LootBoxInfo.SlotSize).ToList();
+
+            // Calculate how many more items are needed to reach SlotSize
+            int itemsToAdd = LootBoxInfo.SlotSize - taken.Count;
+
+            // If more items are needed, pad the list with default values
+            if (itemsToAdd > 0)
+            {
+                taken.AddRange(Enumerable.Repeat(default(LootBoxItemInfo), itemsToAdd));
+            }
+
+            // Shuffle the taken list based on random 2 seed
+            Functions.Shuffle(taken, item.Stats[Stat.Random2]);
+
+            var itemChecks = new List<ItemCheck>();
+
+            var lockState = item.CurrentDurability;
+
+            for (int i = 0; i < taken.Count; i++)
+            {
+                bool unlocked = (lockState & (1 << i)) != 0;
+
+                if (unlocked)
+                {
+                    var selection = taken[i];
+
+                    if (selection == default(LootBoxItemInfo))
+                    {
+                        continue;
+                    }
+
+                    var amount = selection.Amount;
+
+                    if (amount > selection.Item.StackSize)
+                    {
+                        while (amount > selection.Item.StackSize)
+                        {
+                            itemChecks.Add(new ItemCheck(selection.Item, selection.Item.StackSize, UserItemFlags.None, TimeSpan.Zero));
+
+                            amount -= selection.Item.StackSize;
+                        }
+                    }
+
+                    if (amount > 0)
+                    {
+                        itemChecks.Add(new ItemCheck(selection.Item, amount, UserItemFlags.None, TimeSpan.Zero));
+                    }
+                }
+            }
+
+            if (!CanGainItems(true, [.. itemChecks]))
+            {
+                Connection.ReceiveChat(Connection.Language.NotEnoughBagSpaceAvailable, MessageType.System);
+
+                Enqueue(new S.LootBoxClose());
+                return;
+            }
+
+            foreach (ItemCheck check in itemChecks)
+            {
+                while (check.Count > 0)
+                    GainItem(SEnvir.CreateFreshItem(check));
+            }
+
+            S.ItemChanged result = new S.ItemChanged
+            {
+                Link = new CellLinkInfo { GridType = GridType.Inventory, Slot = p.Slot },
+                Success = true
+            };
+
+            if (item.Count > 1)
+            {
+                item.Count--;
+                result.Link.Count = item.Count;
+            }
+            else
+            {
+                RemoveItem(item);
+                Inventory[p.Slot] = null;
+                item.Delete();
+
+                result.Link.Count = 0;
+            }
+
+            Enqueue(result);
+
+            Companion?.RefreshWeight();
+            RefreshWeight();
+
+            Enqueue(new S.LootBoxClose());
+        }
+
+        #endregion
+
+        #region Bundles
+
+        public void BundleOpen(BundleOpen p)
+        {
+            if (p.Slot < 0 || p.Slot >= Inventory.Length) return;
+
+            UserItem item = Inventory[p.Slot];
+
+            if (item == null || item.Info.ItemType != ItemType.Bundle) return;
+
+            BundleUpdate(item, p.Slot);
+        }
+
+        private void BundleUpdate(UserItem item, int slot)
+        {
+            var bundleInfo = SEnvir.BundleInfoList.Binding.FirstOrDefault(x => x.Index == item.Info.Shape);
+            if (bundleInfo == null) return;
+
+            var bundleContents = bundleInfo.Contents.ToList();
+
+            // Shuffle the full list based on the random 1 seed
+            Functions.Shuffle(bundleContents, item.Stats[Stat.Random1]);
+
+            var bundleItems = new List<ClientBundleItemInfo>();
+
+            for (int i = 0; i < bundleInfo.SlotSize; i++)
+            {
+                if (i >= bundleContents.Count) break;
+
+                bundleItems.Add(new ClientBundleItemInfo { ItemIndex = bundleContents[i].Item.Index, Amount = bundleContents[i].Amount, Slot = i });
+            }
+
+            Enqueue(new S.BundleOpen { Slot = slot, Items = bundleItems });
+        }
+
+        public void BundleConfirm(BundleConfirm p)
+        {
+            if (p.Slot < 0 || p.Slot >= Inventory.Length) return;
+
+            UserItem item = Inventory[p.Slot];
+
+            if (item == null || item.Info.ItemType != ItemType.Bundle) return;
+
+            var bundleInfo = SEnvir.BundleInfoList.Binding.FirstOrDefault(x => x.Index == item.Info.Shape);
+            if (bundleInfo == null) return;
+
+            var bundleContents = bundleInfo.Contents.ToList();
+
+            // Shuffle the full list based on the random 1 seed
+            Functions.Shuffle(bundleContents, item.Stats[Stat.Random1]);
+
+            switch (bundleInfo.Type)
+            {
+                case BundleType.OneOf:
+                case BundleType.AnyOf:
+                    {
+                        var choice = p.Choice;
+
+                        int smallest = Math.Min(bundleInfo.SlotSize, bundleContents.Count);
+
+                        if (bundleInfo.Type == BundleType.AnyOf)
+                        {
+                            choice = SEnvir.Random.Next(smallest);
+                        }
+
+                        if (choice < 0 || choice >= smallest) return;
+
+                        var selection = bundleContents[choice];
+
+                        var itemChecks = new List<ItemCheck>();
+
+                        var amount = selection.Amount;
+
+                        if (amount > selection.Item.StackSize)
+                        {
+                            while (amount > selection.Item.StackSize)
+                            {
+                                itemChecks.Add(new ItemCheck(selection.Item, selection.Item.StackSize, UserItemFlags.None, TimeSpan.Zero));
+
+                                amount -= selection.Item.StackSize;
+                            }
+                        }
+
+                        if (amount > 0)
+                        {
+                            itemChecks.Add(new ItemCheck(selection.Item, amount, UserItemFlags.None, TimeSpan.Zero));
+                        }
+
+                        if (!CanGainItems(true, itemChecks.ToArray()))
+                        {
+                            Connection.ReceiveChat(Connection.Language.NotEnoughBagSpaceAvailable, MessageType.System);
+
+                            Enqueue(new S.BundleClose());
+                            return;
+                        }
+
+                        for (int i = 0; i < itemChecks.Count; i++)
+                        {
+                            var itemCheck = itemChecks[i];
+
+                            var gainItem = SEnvir.CreateFreshItem(itemCheck.Info);
+                            gainItem.Count = itemCheck.Count;
+
+                            if (gainItem != null)
+                                GainItem(gainItem);
+                        }
+                    }
+                    break;
+                case BundleType.AllOf:
+                    {
+                        var itemChecks = new List<ItemCheck>();
+
+                        for (int i = 0; i < bundleContents.Count; i++)
+                        {
+                            if (i >= bundleInfo.SlotSize) break;
+
+                            var selection = bundleContents[i];
+
+                            var amount = selection.Amount;
+
+                            if (amount > selection.Item.StackSize)
+                            {
+                                while (amount > selection.Item.StackSize)
+                                {
+                                    itemChecks.Add(new ItemCheck(selection.Item, selection.Item.StackSize, UserItemFlags.None, TimeSpan.Zero));
+
+                                    amount -= selection.Item.StackSize;
+                                }
+                            }
+
+                            if (amount > 0)
+                            {
+                                itemChecks.Add(new ItemCheck(selection.Item, amount, UserItemFlags.None, TimeSpan.Zero));
+                            }
+                        }
+
+                        if (!CanGainItems(true, [.. itemChecks]))
+                        {
+                            Connection.ReceiveChat(Connection.Language.NotEnoughBagSpaceAvailable, MessageType.System);
+
+                            Enqueue(new S.BundleClose());
+                            return;
+                        }
+
+                        for (int i = 0; i < itemChecks.Count; i++)
+                        {
+                            var itemCheck = itemChecks[i];
+
+                            var gainItem = SEnvir.CreateFreshItem(itemCheck.Info);
+                            gainItem.Count = itemCheck.Count;
+
+                            if (gainItem != null)
+                                GainItem(gainItem);
+                        }
+                    }
+                    break;
+            }
+
+            S.ItemChanged result = new S.ItemChanged
+            {
+                Link = new CellLinkInfo { GridType = GridType.Inventory, Slot = p.Slot },
+                Success = true
+            };
+
+            if (item.Count > 1)
+            {
+                item.Count--;
+                result.Link.Count = item.Count;
+            }
+            else
+            {
+                RemoveItem(item);
+                Inventory[p.Slot] = null;
+                item.Delete();
+
+                result.Link.Count = 0;
+            }
+
+            Enqueue(result);
+
+            Companion?.RefreshWeight();
+            RefreshWeight();
+
+            Enqueue(new S.BundleClose());
         }
 
         #endregion

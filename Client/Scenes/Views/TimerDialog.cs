@@ -1,13 +1,10 @@
 ﻿using Client.Controls;
 using Client.Envir;
-using Client.Properties;
 using Library;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using S = Library.Network.ServerPackets;
 
 namespace Client.Scenes.Views
@@ -26,7 +23,7 @@ namespace Client.Scenes.Views
         private readonly DXImageControl _colon = null;
         private readonly int _libraryOffset = 6580;
 
-        private readonly List<ClientTimer> ActiveTimers = new ();
+        private readonly List<ClientTimer> ActiveTimers = new();
         private ClientTimer CurrentTimer = null;
 
         public TimerDialog()
@@ -231,6 +228,36 @@ namespace Client.Scenes.Views
             }
 
             _eggTimer.Loop = true;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+
+            if (!disposing) return;
+
+            _timerStarted = false;
+            _timerCounter = 0;
+            CurrentTimer = null;
+            ActiveTimers.Clear();
+
+            if (_eggTimer != null && !_eggTimer.IsDisposed)
+                _eggTimer.Dispose();
+
+            if (_1000 != null && !_1000.IsDisposed)
+                _1000.Dispose();
+
+            if (_100 != null && !_100.IsDisposed)
+                _100.Dispose();
+
+            if (_10 != null && !_10.IsDisposed)
+                _10.Dispose();
+
+            if (_1 != null && !_1.IsDisposed)
+                _1.Dispose();
+
+            if (_colon != null && !_colon.IsDisposed)
+                _colon.Dispose();
         }
     }
 

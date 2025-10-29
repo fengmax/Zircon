@@ -38,7 +38,7 @@ namespace Client.Scenes.Views
         public void OnStartIndexChanged(int oValue, int nValue)
         {
             UpdateTime = CEnvir.Now.AddMilliseconds(250);
-            
+
             if (nValue > oValue)
                 for (int i = 0; i < Lines.Length; i++)
                 {
@@ -61,7 +61,7 @@ namespace Client.Scenes.Views
                     if (nValue - oValue + i >= 0)
                     {
                         if (Lines[i + nValue - oValue].Rank != null)
-                        Lines[i].Rank = Lines[i + nValue - oValue].Rank;
+                            Lines[i].Rank = Lines[i + nValue - oValue].Rank;
                         else
                             Lines[i].Loading = true;
                     }
@@ -337,7 +337,7 @@ namespace Client.Scenes.Views
         #endregion
 
         public RankingDialog(bool fullRanking = false)
-        {   
+        {
             Index = fullRanking ? 211 : 210;
             LibraryFile = LibraryFile.Interface;
             Size = new Size(fullRanking ? 576 : 330, 456);
@@ -349,6 +349,8 @@ namespace Client.Scenes.Views
                 Parent = this,
                 Index = 15,
                 LibraryFile = LibraryFile.Interface,
+                Hint = CEnvir.Language.CommonControlClose,
+                HintPosition = HintPosition.TopLeft
             };
             CloseButton.Location = new Point(DisplayArea.Width - CloseButton.Size.Width - 3, 3);
             CloseButton.MouseClick += (o, e) => Visible = false;
@@ -837,7 +839,7 @@ namespace Client.Scenes.Views
             };
             RequiredClassBox.SelectedItemChanged += (o, e) =>
             {
-                FilterClass = (RequiredClass?) RequiredClassBox.SelectedItem ?? RequiredClass.All;
+                FilterClass = (RequiredClass?)RequiredClassBox.SelectedItem ?? RequiredClass.All;
                 Config.RankingClass = (int)FilterClass;
                 SelectedRow = null;
             };
@@ -912,7 +914,7 @@ namespace Client.Scenes.Views
                 CEnvir.Enqueue(new C.ObservableSwitch { Allow = !Observable });
             };
             ObservableBox.Location = new Point(OnlineOnlyBox.Location.X + OnlineOnlyBox.Size.Width + 5, 38);
-            
+
             LastUpdate = new DXLabel
             {
                 Parent = this,
@@ -1461,7 +1463,8 @@ namespace Client.Scenes.Views
                     ChangeLabel.Text = " - ";
                     ChangeLabel.ForeColour = Color.White;
                 }
-                else {
+                else
+                {
                     ChangeLabel.Text = $"{(change > 0 ? "▲" : "▼")}{Math.Abs(Rank.RankChange)}";
                     ChangeLabel.ForeColour = change > 0 ? Color.OrangeRed : Color.DodgerBlue;
                 }

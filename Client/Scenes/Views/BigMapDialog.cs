@@ -1,21 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Windows.Forms;
-using Client.Controls;
+﻿using Client.Controls;
 using Client.Envir;
 using Client.Models;
 using Client.UserModels;
 using Library;
 using Library.SystemModels;
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Windows.Forms;
 using C = Library.Network.ClientPackets;
 
-//Cleaned
 namespace Client.Scenes.Views
 {
-    public sealed  class BigMapDialog : DXWindow
+    public sealed class BigMapDialog : DXWindow
     {
         #region Properties
 
@@ -47,10 +46,27 @@ namespace Client.Scenes.Views
 
             if (SelectedInfo == null) return;
 
-            TitleLabel.Text = SelectedInfo.Description;
+            TitleLabel.Text = SelectedInfo.PlayerDescription;
             Image.Index = SelectedInfo.MiniMap;
 
-            SetClientSize(Image.Size);
+            var minWidth = 320;
+            var minHeight = 240;
+
+            var maxWidth = 800;
+            var maxHeight = 600;
+
+            SetClientSize(Image.Size, minWidth, minHeight, maxWidth, maxHeight);
+
+            var imageLargerThanPanel = (Image.Size.Width > maxWidth || Image.Size.Height > maxHeight);
+
+            Image.Movable = imageLargerThanPanel;
+            Image.IgnoreMoveBounds = imageLargerThanPanel;
+
+            var locationX = (Image.Size.Width - Panel.Size.Width) / 2;
+            var locationY = (Image.Size.Height - Panel.Size.Height) / 2;
+
+            Image.Location = new Point(-locationX, -locationY);
+
             Location = new Point((GameScene.Game.Size.Width - Size.Width) / 2, (GameScene.Game.Size.Height - Size.Height) / 2);
 
             Size size = GetMapSize(SelectedInfo.FileName);
@@ -65,9 +81,44 @@ namespace Client.Scenes.Views
 
             foreach (ClientObjectData ob in GameScene.Game.DataDictionary.Values)
                 Update(ob);
-
-
         }
+
+        public void ToggleOpen(bool open)
+        {
+            if (open)
+            {
+                if (!TryShowMap(GameScene.Game.MapControl.MapInfo))
+                {
+                    return;
+                }
+
+                Opacity = 1F;
+                Visible = true;
+            }
+            else
+            {
+                Visible = false;
+            }
+        }
+
+        public bool TryShowMap(MapInfo map, bool sendMessage = true)
+        {
+            if (map == null || map.MiniMap == 0)
+            {
+                if (sendMessage)
+                    GameScene.Game.ReceiveChat("No map available.", MessageType.System);
+
+                return false;
+            }
+
+            return true;
+        }
+
+        public void SetClientSize(Size clientSize, int minWidth, int minHeight, int maxWidth, int maxHeight)
+        {
+            SetClientSize(new Size(Math.Min(Math.Max(clientSize.Width, minWidth), maxWidth), Math.Min(Math.Max(clientSize.Height, minHeight), maxHeight)));
+        }
+
         private Size GetMapSize(string fileName)
         {
             var path = Path.Combine(Config.MapPath, fileName + ".map");
@@ -78,17 +129,17 @@ namespace Client.Scenes.Views
             using (BinaryReader reader = new BinaryReader(stream))
             {
                 stream.Seek(22, SeekOrigin.Begin);
-                
+
                 return new Size(reader.ReadInt16(), reader.ReadInt16());
             }
         }
 
         #endregion
-        
+
         public Rectangle Area;
         public DXImageControl Image;
         public DXControl Panel;
-        
+
         public static float ScaleX, ScaleY;
 
         public Dictionary<object, DXControl> MapInfoObjects = new Dictionary<object, DXControl>();
@@ -102,13 +153,14 @@ namespace Client.Scenes.Views
             Panel.Location = ClientArea.Location;
             Panel.Size = ClientArea.Size;
         }
+
         public override void OnIsVisibleChanged(bool oValue, bool nValue)
         {
             base.OnIsVisibleChanged(oValue, nValue);
 
             SelectedInfo = IsVisible ? GameScene.Game.MapControl.MapInfo : null;
-
         }
+
         public override void OnOpacityChanged(float oValue, float nValue)
         {
             base.OnOpacityChanged(oValue, nValue);
@@ -126,7 +178,6 @@ namespace Client.Scenes.Views
             }
         }
 
-
         public override WindowType Type => WindowType.None;
         public override bool CustomSize => false;
         public override bool AutomaticVisibility => false;
@@ -138,7 +189,7 @@ namespace Client.Scenes.Views
             BackColour = Color.Black;
             HasFooter = false;
 
-            AllowResize = true;
+            AllowResize = false;
 
             Panel = new DXControl
             {
@@ -151,6 +202,9 @@ namespace Client.Scenes.Views
             {
                 Parent = Panel,
                 LibraryFile = LibraryFile.MiniMap,
+                Movable = true,
+                IgnoreMoveBounds = true,
+                Clip = true
             };
             Image.MouseClick += Image_MouseClick;
         }
@@ -161,7 +215,7 @@ namespace Client.Scenes.Views
             {
                 int x = (int)((e.Location.X - Image.DisplayArea.X) / ScaleX);
                 int y = (int)((e.Location.Y - Image.DisplayArea.Y) / ScaleY);
-               
+
                 CEnvir.Enqueue(new C.TeleportRing { Location = new Point(x, y), Index = SelectedInfo.Index });
             }
         }
@@ -184,9 +238,7 @@ namespace Client.Scenes.Views
         {
             if (SelectedInfo == null) return;
 
-            DXControl control;
-
-            if (!MapInfoObjects.TryGetValue(ob, out control))
+            if (!MapInfoObjects.TryGetValue(ob, out DXControl control))
             {
                 if (ob.Region?.Map != SelectedInfo) return;
 
@@ -197,9 +249,9 @@ namespace Client.Scenes.Views
             }
             else if ((CurrentQuest)control.Tag == ob.CurrentQuest) return;
 
-                control.Dispose();
-                MapInfoObjects.Remove(ob);
-            if (ob.Region?.Map != SelectedInfo)  return;
+            control.Dispose();
+            MapInfoObjects.Remove(ob);
+            if (ob.Region?.Map != SelectedInfo) return;
 
             control = GameScene.Game.GetNPCControl(ob);
             control.Parent = Image;
@@ -229,9 +281,9 @@ namespace Client.Scenes.Views
             int x = (minX + maxX) / 2;
             int y = (minY + maxY) / 2;
 
-
             control.Location = new Point((int)(ScaleX * x) - control.Size.Width / 2, (int)(ScaleY * y) - control.Size.Height / 2);
         }
+
         public void Update(MovementInfo ob)
         {
             if (ob.SourceRegion == null || ob.SourceRegion.Map != SelectedInfo) return;
@@ -263,8 +315,8 @@ namespace Client.Scenes.Views
                     maxY = point.Y;
             }
 
-            int x = (minX + maxX)/2;
-            int y = (minY + maxY)/2;
+            int x = (minX + maxX) / 2;
+            int y = (minY + maxY) / 2;
 
 
             DXImageControl control;
@@ -272,43 +324,57 @@ namespace Client.Scenes.Views
             {
                 LibraryFile = LibraryFile.MiniMapIcon,
                 Parent = Image,
-                Opacity =  Opacity,
-                ImageOpacity =  Opacity,
-                Hint = ob.DestinationRegion.Map.Description,
+                Opacity = Opacity,
+                ImageOpacity = Opacity,
+                Hint = ob.DestinationRegion.Map.PlayerDescription
             };
             control.OpacityChanged += (o, e) => control.ImageOpacity = control.Opacity;
 
             GameScene.Game.UpdateMapIcon(control, ob.Icon);
 
-            control.MouseClick += (o, e) => SelectedInfo = ob.DestinationRegion.Map;
-            control.Location = new Point((int) (ScaleX*x) - control.Size.Width/2, (int) (ScaleY*y) - control.Size.Height/2);
+            control.MouseClick += (o, e) =>
+            {
+                if (!TryShowMap(ob.DestinationRegion.Map))
+                {
+                    return;
+                }
+
+                SelectedInfo = ob.DestinationRegion.Map;
+            };
+            control.Location = new Point((int)(ScaleX * x) - control.Size.Width / 2, (int)(ScaleY * y) - control.Size.Height / 2);
         }
+
         public void Update(ClientObjectData ob)
         {
             if (SelectedInfo == null) return;
 
-            DXControl control;
-
-            if (!MapInfoObjects.TryGetValue(ob, out control))
+            if (!MapInfoObjects.TryGetValue(ob, out DXControl existing))
             {
                 if (ob.MapIndex != SelectedInfo.Index) return;
                 if (ob.ItemInfo != null && ob.ItemInfo.Rarity == Rarity.Common) return;
                 if (ob.MonsterInfo != null && (ob.Dead || ob.MonsterInfo.Image == MonsterImage.None)) return;
 
-                MapInfoObjects[ob] = control = new DXControl
-                {
-                    DrawTexture = true,
-                    Parent = Image,
-                    Opacity =  Opacity,
-                };
+                DXMapInfoControl created = CreateMapInfoObject();
+                MapInfoObjects[ob] = created;
+                existing = created;
             }
             else if (ob.MapIndex != SelectedInfo.Index || (ob.MonsterInfo != null && ob.Dead) || (ob.ItemInfo != null && ob.ItemInfo.Rarity == Rarity.Common))
             {
-                control.Dispose();
+                existing.Dispose();
                 MapInfoObjects.Remove(ob);
                 return;
             }
-            
+
+            DXMapInfoControl control = existing as DXMapInfoControl;
+            if (control == null)
+            {
+                existing.Dispose();
+
+                DXMapInfoControl created = CreateMapInfoObject();
+                MapInfoObjects[ob] = created;
+                control = created;
+            }
+
             Size size = new Size(3, 3);
             Color colour = Color.White;
             string name = ob.Name;
@@ -316,9 +382,10 @@ namespace Client.Scenes.Views
             if (ob.MonsterInfo != null)
             {
                 name = $"{ob.MonsterInfo.MonsterName}";
+
                 if (ob.MonsterInfo.AI < 0)
                 {
-                    colour = Color.LightBlue;
+                    colour = Color.Red;
                 }
                 else
                 {
@@ -352,12 +419,22 @@ namespace Client.Scenes.Views
                         control.Controls[0].BackColour = colour;
 
                     colour = Color.White;
+
                 }
 
                 if (!string.IsNullOrEmpty(ob.PetOwner))
                 {
                     name += $" ({ob.PetOwner})";
-                    control.DrawTexture = false;
+
+                    if (ob.PetOwner == GameScene.Game.User.Name)
+                    {
+                        colour = Color.Orange;
+                        size = new Size(4, 4);
+                    }
+                    else
+                    {
+                        colour = Color.Red;
+                    }
                 }
             }
             else if (ob.ItemInfo != null)
@@ -368,7 +445,29 @@ namespace Client.Scenes.Views
             {
                 if (MapObject.User.ObjectID == ob.ObjectID)
                 {
-                    colour = Color.Cyan;
+                    size = new Size(3, 3);
+                    control.BorderColour = Color.Lime;
+                    colour = Color.Transparent;
+
+                    if (control.ProcessAction == null)
+                    {
+                        control.ProcessAction = () =>
+                        {
+                            if (!control.IsBorderAnimationActive)
+                            {
+                                bool isVisibleSecond = CEnvir.Now.Millisecond < 500;
+
+                                control.Border = true;
+                                control.BorderSize = 1f;
+                                control.BorderColour = isVisibleSecond ? Color.Lime : Color.Transparent;
+                            }
+                            else
+                            {
+                                //control.BackColour = Color.Transparent;
+                                control.BorderSize = 3f;
+                            }
+                        };
+                    }
                 }
                 else if (GameScene.Game.Observer)
                 {
@@ -376,9 +475,10 @@ namespace Client.Scenes.Views
                 }
                 else if (GameScene.Game.GroupBox.Members.Any(x => x.ObjectID == ob.ObjectID))
                 {
-                    colour = Color.Blue;
+                    colour = Color.Lime;
+                    size = new Size(4, 4);
                 }
-                else if (GameScene.Game.Partner != null && GameScene.Game.Partner.ObjectID == ob.ObjectID) 
+                else if (GameScene.Game.Partner != null && GameScene.Game.Partner.ObjectID == ob.ObjectID)
                 {
                     colour = Color.DeepPink;
                 }
@@ -391,7 +491,28 @@ namespace Client.Scenes.Views
             control.Hint = name;
             control.BackColour = colour;
             control.Size = size;
-            control.Location = new Point((int) (ScaleX*ob.Location.X) - size.Width/2, (int) (ScaleY*ob.Location.Y) - size.Height/2);
+            control.Location = new Point((int)(ScaleX * ob.Location.X) - size.Width / 2, (int)(ScaleY * ob.Location.Y) - size.Height / 2);
+        }
+
+        public void PlayLocatorAnim(uint objectID)
+        {
+            if (MapInfoObjects.Keys.OfType<ClientObjectData>().FirstOrDefault(x => x.ObjectID == objectID) is not { } ob)
+                return;
+
+            if (!MapInfoObjects.TryGetValue(ob, out var control))
+                return;
+
+            if (control is DXMapInfoControl mapInfoObject)
+                mapInfoObject.PlayBorderAnimation();
+        }
+
+        private DXMapInfoControl CreateMapInfoObject()
+        {
+            return new DXMapInfoControl
+            {
+                Parent = Image,
+                Opacity = Opacity,
+            };
         }
 
         public void Remove(object ob)
@@ -403,7 +524,7 @@ namespace Client.Scenes.Views
             control.Dispose();
             MapInfoObjects.Remove(ob);
         }
-        
+
         #endregion
 
         #region IDisposable
@@ -432,7 +553,6 @@ namespace Client.Scenes.Views
                 MapInfoObjects.Clear();
                 MapInfoObjects = null;
 
-
                 if (Image != null)
                 {
                     if (!Image.IsDisposed)
@@ -440,7 +560,7 @@ namespace Client.Scenes.Views
 
                     Image = null;
                 }
-                
+
                 if (Panel != null)
                 {
                     if (!Panel.IsDisposed)

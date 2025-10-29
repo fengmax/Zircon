@@ -1,18 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Windows.Forms;
-using Client.Controls;
+﻿using Client.Controls;
 using Client.Envir;
 using Client.Models;
 using Client.Models.Particles;
 using Library;
 using Library.SystemModels;
-using SlimDX;
-using SlimDX.Direct3D9;
+using SharpDX.Direct3D9;
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Numerics;
+using System.Windows.Forms;
 using C = Library.Network.ClientPackets;
+using Client.Extensions;
+using Matrix = SharpDX.Matrix;
 
 //Cleaned
 namespace Client.Scenes.Views
@@ -106,7 +108,7 @@ namespace Client.Scenes.Views
 
 
         #endregion
-        
+
 
         #region MouseLocation
 
@@ -144,8 +146,8 @@ namespace Client.Scenes.Views
                 LLayer.Size = Size;
 
 
-            OffSetX = Size.Width/2/CellWidth;
-            OffSetY = Size.Height/2/CellHeight;
+            OffSetX = Size.Width / 2 / CellWidth;
+            OffSetY = Size.Height / 2 / CellHeight;
         }
 
         public MouseButtons MapButtons;
@@ -186,7 +188,7 @@ namespace Client.Scenes.Views
             DrawTexture = true;
 
             BackColour = Color.Empty;
-            
+
             FLayer = new Floor { Parent = this, Size = Size };
             LLayer = new Light { Parent = this, Location = new Point(-GameScene.Game.Location.X, -GameScene.Game.Location.Y), Size = Size };
         }
@@ -225,7 +227,7 @@ namespace Client.Scenes.Views
                 {
                     if (ob.DrawType != DrawType.Final) continue;
 
-                     ob.Draw();
+                    ob.Draw();
                 }
             }
 
@@ -297,12 +299,12 @@ namespace Client.Scenes.Views
 
             FLayer.CheckTexture();
             LLayer.CheckTexture();
-            
+
             //CreateTexture();
             OnBeforeDraw();
 
             DrawControl();
-            
+
             DrawBorder();
             OnAfterDraw();
         }
@@ -317,7 +319,7 @@ namespace Client.Scenes.Views
 
             if (image?.Image == null) return;
 
-            PresentTexture(image.Image, Parent,DisplayArea, Color.White, this, 0, 0, 1F);
+            PresentTexture(image.Image, Parent, DisplayArea, Color.White, this, 0, 0, 1F);
         }
 
         private void DrawObjects()
@@ -345,22 +347,24 @@ namespace Client.Scenes.Views
                         bool blend = false;
                         if (cell.MiddleAnimationFrame > 1 && cell.MiddleAnimationFrame < 255)
                         {
-                            index += Animation%(cell.MiddleAnimationFrame & 0x4F);
-                            blend = (cell.MiddleAnimationFrame & 0x50) > 0;
+                            blend = cell.MiddleAnimationBlend;
+                            index += Animation % cell.MiddleAnimationCount;
                         }
 
                         Size s = library.GetSize(index);
 
-                        if ((s.Width != CellWidth || s.Height != CellHeight) && (s.Width != CellWidth*2 || s.Height != CellHeight*2))
+                        if ((s.Width != CellWidth || s.Height != CellHeight) && (s.Width != CellWidth * 2 || s.Height != CellHeight * 2))
                         {
                             if (!blend)
                                 library.Draw(index, drawX, drawY - s.Height, Color.White, false, 1F, ImageType.Image);
                             else
                                 library.DrawBlend(index, drawX, drawY - s.Height, Color.White, false, 0.5F, ImageType.Image);
                         }
+                        else
+                        {
+                            library.Draw(index, drawX, drawY - s.Height, Color.White, false, 1F, ImageType.Image);
+                        }
                     }
-
-
 
                     if (Libraries.KROrder.TryGetValue(cell.FrontFile, out file) && file != LibraryFile.Tilesc && CEnvir.LibraryList.TryGetValue(file, out library))
                     {
@@ -369,14 +373,14 @@ namespace Client.Scenes.Views
                         bool blend = false;
                         if (cell.FrontAnimationFrame > 1 && cell.FrontAnimationFrame < 255)
                         {
-                            index += Animation % (cell.FrontAnimationFrame & 0x7F);
-                            blend = (cell.FrontAnimationFrame & 0x80) > 0;
+                            blend = cell.FrontAnimationBlend;
+                            index += Animation % cell.FrontAnimationCount;
                         }
-                    
+
                         Size s = library.GetSize(index);
 
 
-                        if ((s.Width != CellWidth || s.Height != CellHeight) && (s.Width != CellWidth*2 || s.Height != CellHeight*2))
+                        if ((s.Width != CellWidth || s.Height != CellHeight) && (s.Width != CellWidth * 2 || s.Height != CellHeight * 2))
                         {
                             if (!blend)
                                 library.Draw(index, drawX, drawY - s.Height, Color.White, false, 1F, ImageType.Image);
@@ -410,13 +414,15 @@ namespace Client.Scenes.Views
 
             }
 
-            if (User.Opacity != 1f) return;
-            float oldOpacity = MapObject.User.Opacity;
-            MapObject.User.Opacity = 0.65F;
+            if (User.Opacity == 1f)
+            {
+                float oldOpacity = MapObject.User.Opacity;
+                MapObject.User.Opacity = 0.65F;
 
-            MapObject.User.DrawPlayer(false);
+                MapObject.User.DrawPlayer(false);
 
-            MapObject.User.Opacity = oldOpacity;
+                MapObject.User.Opacity = oldOpacity;
+            }
 
             if (Config.DrawEffects)
             {
@@ -459,11 +465,11 @@ namespace Client.Scenes.Views
                         for (int y = 0; y < Height; y++)
                             Cells[x, y] = new Cell();
 
-                    for (int x = 0; x < Width/2; x++)
-                        for (int y = 0; y < Height/2; y++)
+                    for (int x = 0; x < Width / 2; x++)
+                        for (int y = 0; y < Height / 2; y++)
                         {
-                            Cells[(x*2), (y*2)].BackFile = reader.ReadByte();
-                            Cells[(x*2), (y*2)].BackImage = reader.ReadUInt16();
+                            Cells[(x * 2), (y * 2)].BackFile = reader.ReadByte();
+                            Cells[(x * 2), (y * 2)].BackImage = reader.ReadUInt16();
                         }
 
                     for (int x = 0; x < Width; x++)
@@ -484,7 +490,7 @@ namespace Client.Scenes.Views
 
                             mStream.Seek(3, SeekOrigin.Current);
 
-                            Cells[x, y].Light = (byte) (reader.ReadByte() & 0x0F)*2;
+                            Cells[x, y].Light = (byte)(reader.ReadByte() & 0x0F) * 2;
 
                             mStream.Seek(1, SeekOrigin.Current);
 
@@ -555,7 +561,7 @@ namespace Client.Scenes.Views
                 if (Config.RightClickDeTarget && MapObject.TargetObject?.Race == ObjectType.Monster)
                     MapObject.TargetObject = null;
             }
-            
+
             if (e.Button != MouseButtons.Left) return;
 
             DXItemCell cell = DXItemCell.SelectedCell;
@@ -589,7 +595,7 @@ namespace Client.Scenes.Views
                     DXItemCell.SelectedCell = null;
                     return;
                 }
-                
+
                 DXItemAmountWindow window = new DXItemAmountWindow("Drop Item", cell.Item);
 
                 window.ConfirmButton.MouseClick += (o, a) =>
@@ -630,7 +636,7 @@ namespace Client.Scenes.Views
                 GameScene.Game.CurrencyPickedUp = null;
                 return;
             }
-            
+
             if (CanAttack(MapObject.MouseObject))
             {
                 MapObject.TargetObject = MapObject.MouseObject;
@@ -701,7 +707,7 @@ namespace Client.Scenes.Views
 
                 #endregion Shukiran
 
-                if (MapObject.MouseObject.Race == ObjectType.Monster && ((MonsterObject) MapObject.MouseObject).MonsterInfo.AI >= 0) //Check if AI is guard
+                if (MapObject.MouseObject.Race == ObjectType.Monster && ((MonsterObject)MapObject.MouseObject).MonsterInfo.AI >= 0) //Check if AI is guard
                 {
                     MapObject.MagicObject = MapObject.TargetObject;
                     GameScene.Game.FocusObject = MapObject.MouseObject;
@@ -763,7 +769,7 @@ namespace Client.Scenes.Views
         public void CheckCursor()
         {
             MapObject deadObject = null, itemObject = null;
-            
+
             for (int d = 0; d < 4; d++)
             {
                 for (int y = MapLocation.Y - d; y <= MapLocation.Y + d; y++)
@@ -840,18 +846,16 @@ namespace Client.Scenes.Views
             {
                 if (CEnvir.Now < MapObject.User.NextActionTime || MapObject.User.ActionQueue.Count != 0) return;
 
-                //  if (QueuedMagic.Action == MirAction.Magic && (Spell)QueuedMagic.Extra[1] == Magic.ShoulderDash && !GameScene.Game.MoveFrame) return;
-
                 MapObject.User.AttemptAction(User.MagicAction);
                 User.MagicAction = null;
                 Mining = false;
             }
 
-            bool haselementalhurricane = MapObject.User.VisibleBuffs.Contains(BuffType.ElementalHurricane);
+            bool haselementalhurricane = MapObject.User.VisibleBuffs.ContainsKey(BuffType.ElementalHurricane);
 
             if (!haselementalhurricane && MapObject.TargetObject != null && !MapObject.TargetObject.Dead && ((MapObject.TargetObject.Race == ObjectType.Monster && string.IsNullOrEmpty(MapObject.TargetObject.PetOwner)) || CEnvir.Shift))
             {
-                if (Functions.Distance(MapObject.TargetObject.CurrentLocation, MapObject.User.CurrentLocation) ==  1 && CEnvir.Now > User.AttackTime && User.Horse == HorseType.None)
+                if (Functions.Distance(MapObject.TargetObject.CurrentLocation, MapObject.User.CurrentLocation) == 1 && CEnvir.Now > User.AttackTime && User.Horse == HorseType.None)
                 {
                     MapObject.User.AttemptAction(new ObjectAction(
                         MirAction.Attack,
@@ -979,7 +983,7 @@ namespace Client.Scenes.Views
                         if (MapObject.MouseObject is PlayerObject && MapObject.MouseObject != MapObject.User && CEnvir.Ctrl) break;
 
                         if (!GameScene.Game.MoveFrame || (User.Poison & PoisonType.WraithGrip) == PoisonType.WraithGrip) break;
-                        
+
                         if (Functions.InRange(MapLocation, MapObject.User.CurrentLocation, 2) || haselementalhurricane)
                         {
                             if (direction != User.Direction)
@@ -1092,6 +1096,7 @@ namespace Client.Scenes.Views
                 {
                     steps = 1;
                 }
+
                 direction = best;
                 break;
             }
@@ -1105,7 +1110,7 @@ namespace Client.Scenes.Views
             Point loc = Functions.Move(MapObject.User.CurrentLocation, dir, distance);
 
             if (loc.X >= 0 && loc.Y >= 0 && loc.X < Width && loc.Y < Height && !Cells[loc.X, loc.Y].Blocking()) return dir;
-            
+
 
             PointF c = new PointF(OffSetX * CellWidth + CellWidth / 2F, OffSetY * CellHeight + CellHeight / 2F);
             PointF a = new PointF(c.X, 0);
@@ -1143,7 +1148,7 @@ namespace Client.Scenes.Views
             Point loc = Functions.Move(MapObject.User.CurrentLocation, dir, distance);
 
             if (loc.X >= 0 && loc.Y >= 0 && loc.X < Width && loc.Y < Height && !Cells[loc.X, loc.Y].Blocking()) return dir;
-            
+
 
             PointF c = new PointF(MapObject.OffSetX * MapObject.CellWidth + MapObject.CellWidth / 2F, MapObject.OffSetY * MapObject.CellHeight + MapObject.CellHeight / 2F);
             PointF a = new PointF(c.X, 0);
@@ -1191,7 +1196,7 @@ namespace Client.Scenes.Views
 
         public MirDirection MouseDirection() //22.5 = 16
         {
-            PointF p = new PointF(MouseLocation.X  / CellWidth, MouseLocation.Y / CellHeight);
+            PointF p = new PointF(MouseLocation.X / CellWidth, MouseLocation.Y / CellHeight);
 
             //If close proximity then co by co ords 
             if (Functions.InRange(new Point(OffSetX, OffSetY), Point.Truncate(p), 2))
@@ -1244,7 +1249,7 @@ namespace Client.Scenes.Views
                 case ObjectType.Player:
                     break;
                 case ObjectType.Monster:
-                    MonsterObject mob = (MonsterObject) ob;
+                    MonsterObject mob = (MonsterObject)ob;
 
                     if (mob.MonsterInfo.AI < 0) return false;
 
@@ -1307,7 +1312,7 @@ namespace Client.Scenes.Views
             return !Cells[location.X, location.Y].Flag;
         }
         #endregion
-        
+
         #region IDisposable
 
         protected override void Dispose(bool disposing)
@@ -1397,7 +1402,7 @@ namespace Client.Scenes.Views
                 if (!TextureValid)
                     CreateTexture();
             }
-            
+
             protected override void OnClearTexture()
             {
                 base.OnClearTexture();
@@ -1457,11 +1462,11 @@ namespace Client.Scenes.Views
 
                             Size s = library.GetSize(index);
 
-                            if ((s.Width == CellWidth && s.Height == CellHeight) || (s.Width == CellWidth*2 && s.Height == CellHeight*2))
+                            if ((s.Width == CellWidth && s.Height == CellHeight) || (s.Width == CellWidth * 2 && s.Height == CellHeight * 2))
                                 library.Draw(index, drawX, drawY - CellHeight, Color.White, false, 1F, ImageType.Image);
                         }
 
-                        
+
                         if (Libraries.KROrder.TryGetValue(cell.FrontFile, out file) && file != LibraryFile.Tilesc && CEnvir.LibraryList.TryGetValue(file, out library))
                         {
                             int index = cell.FrontImage - 1;
@@ -1469,9 +1474,9 @@ namespace Client.Scenes.Views
                             if (cell.FrontAnimationFrame > 1 && cell.FrontAnimationFrame < 255)
                                 continue;//  index += GameScene.Game.MapControl.Animation % cell.FrontAnimationFrame;
 
-                                Size s = library.GetSize(index);
+                            Size s = library.GetSize(index);
 
-                            if ((s.Width == CellWidth && s.Height == CellHeight) || (s.Width == CellWidth*2 && s.Height == CellHeight*2))
+                            if ((s.Width == CellWidth && s.Height == CellHeight) || (s.Width == CellWidth * 2 && s.Height == CellHeight * 2))
                                 library.Draw(index, drawX, drawY - CellHeight, Color.White, false, 1F, ImageType.Image);
                         }
                     }
@@ -1509,7 +1514,7 @@ namespace Client.Scenes.Views
 
                 if (MapObject.User.Dead)
                 {
-                    DXManager.Device.Clear(ClearFlags.Target, Color.IndianRed, 0, 0);
+                    DXManager.Device.Clear(ClearFlags.Target, Color.IndianRed, 0f, 0);
                     return;
                 }
 
@@ -1520,17 +1525,17 @@ namespace Client.Scenes.Views
 
                 const float lightScale = 0.02F; //Players/Monsters
                 const float baseSize = 0.1F;
-                
+
                 float fX;
                 float fY;
 
                 if ((MapObject.User.Poison & PoisonType.Abyss) == PoisonType.Abyss)
                 {
-                    DXManager.Device.Clear(ClearFlags.Target, Color.Black, 0, 0);
+                    DXManager.Device.Clear(ClearFlags.Target, Color.Black, 0f, 0);
 
                     float scale = baseSize + 4 * lightScale;
 
-                    fX = (OffSetX + MapObject.User.CurrentLocation.X - User.CurrentLocation.X) * CellWidth  + CellWidth / 2;
+                    fX = (OffSetX + MapObject.User.CurrentLocation.X - User.CurrentLocation.X) * CellWidth + CellWidth / 2;
                     fY = (OffSetY + MapObject.User.CurrentLocation.Y - User.CurrentLocation.Y) * CellHeight;
 
                     fX -= (DXManager.LightWidth * scale) / 2;
@@ -1628,7 +1633,7 @@ namespace Client.Scenes.Views
                         float scale = baseSize + tile.Light * 30 * lightScale;
 
                         fX = drawX + CellWidth / 2;
-                        fY = drawY  + CellHeight / 2;
+                        fY = drawY + CellHeight / 2;
 
                         fX -= DXManager.LightWidth * scale / 2;
                         fY -= DXManager.LightHeight * scale / 2;
@@ -1652,7 +1657,7 @@ namespace Client.Scenes.Views
                 switch (GameScene.Game.MapControl.MapInfo.Light)
                 {
                     case LightSetting.Default:
-                        byte shading = (byte) (255 * GameScene.Game.DayTime);
+                        byte shading = (byte)(255 * GameScene.Game.DayTime);
                         BackColour = Color.FromArgb(shading, shading, shading);
                         Visible = true;
                         break;
@@ -1698,15 +1703,27 @@ namespace Client.Scenes.Views
         public int FrontFile;
         public int FrontImage;
 
-        public int FrontAnimationFrame;
-        public int FrontAnimationTick;
+        public int FrontAnimationFrame { get; set; }
+        public int FrontAnimationTick { get; set; }
+        public int FrontAnimationCount => FrontAnimationFrame & FrontFrameMask;
+        public bool FrontAnimationBlend => (FrontAnimationFrame & FrontBlendBit) != 0;
 
-        public int MiddleAnimationFrame;
-        public int MiddleAnimationTick;
+        public int MiddleAnimationFrame { get; set; }
+        public int MiddleAnimationTick { get; set; }
+        public int MiddleAnimationCount => MiddleAnimationFrame & MiddleFrameMask;
+        public bool MiddleAnimationBlend => (MiddleAnimationFrame & MiddleBlendBit) != 0;
 
         public int Light;
 
         public bool Flag;
+
+        // --- FRONT ANIMATION ENCODING ---
+        public const int FrontFrameMask = 0x0F; // lower 4 bits = frame count
+        public const int FrontBlendBit = 0x80;  // bit 7 = blend flag
+
+        // --- MIDDLE ANIMATION ENCODING ---
+        public const int MiddleFrameMask = 0x0F; // lower 4 bits = frame count
+        public const int MiddleBlendBit = 0x80;  // bit 7 = blend flag
 
         public List<MapObject> Objects;
 

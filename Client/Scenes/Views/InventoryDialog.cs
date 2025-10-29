@@ -184,6 +184,8 @@ namespace Client.Scenes.Views
                 Parent = this,
                 Index = 15,
                 LibraryFile = LibraryFile.Interface,
+                Hint = CEnvir.Language.CommonControlClose,
+                HintPosition = HintPosition.TopLeft
             };
             CloseButton.Location = new Point(DisplayArea.Width - CloseButton.Size.Width - 3, 3);
             CloseButton.MouseClick += (o, e) => Visible = false;
@@ -329,8 +331,8 @@ namespace Client.Scenes.Views
                 Index = 354,
                 Parent = this,
                 Location = new Point(218, 384),
-                Hint = "Sell",
-                Enabled = false,
+                Hint = "Sell All",
+                Enabled = true,
                 Visible = false
             };
             SellButton.MouseClick += SellButton_MouseClick;
@@ -407,7 +409,8 @@ namespace Client.Scenes.Views
 
                 SecondaryCurrencyLabel.Text = sum.ToString("#,##0");
 
-                SellButton.Enabled = count > 0;
+                SellButton.Enabled = true;
+                SellButton.Hint = count == 1 ? "Sell" : "Sell All";
             }
         }
 
@@ -421,14 +424,33 @@ namespace Client.Scenes.Views
 
             List<CellLinkInfo> links = new();
 
-            foreach (DXItemCell itemCell in SelectedItems)
+            if (SelectedItems.Count > 0)
             {
-                if ((itemCell.Item.Flags & UserItemFlags.Locked) == UserItemFlags.Locked) continue;
+                foreach (DXItemCell itemCell in SelectedItems)
+                {
+                    if ((itemCell.Item.Flags & UserItemFlags.Locked) == UserItemFlags.Locked) continue;
 
-                links.Add(new CellLinkInfo { Count = itemCell.Item.Count, GridType = GridType.Inventory, Slot = itemCell.Slot });
+                    links.Add(new CellLinkInfo { Count = itemCell.Item.Count, GridType = GridType.Inventory, Slot = itemCell.Slot });
+                }
+            }
+            else
+            {
+                //Sell all
+                foreach (DXItemCell itemCell in Grid.Grid)
+                {
+                    if (itemCell.Item == null) continue;
+                    if ((itemCell.Item.Flags & UserItemFlags.Locked) == UserItemFlags.Locked) continue;
+
+                    if (SellableItemTypes.Count > 0 && !SellableItemTypes.Contains(itemCell.Item.Info.ItemType)) continue;
+
+                    links.Add(new CellLinkInfo { Count = itemCell.Item.Count, GridType = GridType.Inventory, Slot = itemCell.Slot });
+                }
             }
 
-            CEnvir.Enqueue(new C.NPCSell { Links = links });
+            if (links.Count > 0)
+            {
+                CEnvir.Enqueue(new C.NPCSell { Links = links });
+            }
         }
 
         private void PrimaryCurrencyLabel_MouseClick(object sender, MouseEventArgs e)
@@ -678,6 +700,14 @@ namespace Client.Scenes.Views
                         TrashButton.Dispose();
 
                     TrashButton = null;
+                }
+
+                if (SellButton != null)
+                {
+                    if (!SellButton.IsDisposed)
+                        SellButton.Dispose();
+
+                    SellButton = null;
                 }
 
                 if (PrimaryCurrencyTitle != null)

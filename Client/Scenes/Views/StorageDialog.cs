@@ -121,6 +121,8 @@ namespace Client.Scenes.Views
                 Parent = this,
                 Index = 15,
                 LibraryFile = LibraryFile.Interface,
+                Hint = CEnvir.Language.CommonControlClose,
+                HintPosition = HintPosition.TopLeft
             };
             CloseButton.Location = new Point(DisplayArea.Width - CloseButton.Size.Width - 3, 3);
             CloseButton.MouseClick += (o, e) => Visible = false;
@@ -486,6 +488,14 @@ namespace Client.Scenes.Views
                         ItemNameTextBox.Dispose();
 
                     ItemNameTextBox = null;
+                }
+
+                if (ItemTypeComboBox != null)
+                {
+                    if (!ItemTypeComboBox.IsDisposed)
+                        ItemTypeComboBox.Dispose();
+
+                    ItemTypeComboBox = null;
                 }
 
                 if (CloseButton != null)

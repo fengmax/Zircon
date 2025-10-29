@@ -27,22 +27,22 @@ namespace Server.Models
         {
             foreach (SConnection con in SEnvir.Connections)
                 con.ReceiveChat(string.Format(con.Language.ConquestStarted, Castle.Name), MessageType.System);
-            
+
 
             Map = SEnvir.GetMap(Castle.Map);
 
             for (int i = Map.NPCs.Count - 1; i >= 0; i--)
             {
                 NPCObject npc = Map.NPCs[i];
-             //   if (!Castle.CastleRegion.PointList.Contains(npc.CurrentLocation)) continue;
-                
+                if (!Castle.ObjectiveRegion.PointList.Contains(npc.CurrentLocation)) continue;
+
                 npc.Visible = false;
                 npc.RemoveAllObjects();
             }
 
             foreach (GuildInfo guild in Participants)
                 guild.Conquest?.Delete();
-            
+
             SEnvir.Broadcast(new S.GuildConquestStarted { Index = Castle.Index });
 
             PingPlayers();
@@ -55,27 +55,26 @@ namespace Server.Models
         public void Process()
         {
             if (SEnvir.Now < EndTime) return;
-            
+
             EndWar();
         }
 
-        
+
         public void EndWar()
         {
             foreach (SConnection con in SEnvir.Connections)
                 con.ReceiveChat(string.Format(con.Language.ConquestFinished, Castle.Name), MessageType.System);
 
             Ended = true;
-            
 
-            //for (int i = Map.NPCs.Count - 1; i >= 0; i--)
-            //{
-            //    NPCObject npc = Map.NPCs[i];
-            //    if (!Castle.CastleRegion.PointList.Contains(npc.CurrentLocation)) continue;
+            for (int i = Map.NPCs.Count - 1; i >= 0; i--)
+            {
+                NPCObject npc = Map.NPCs[i];
+                if (!Castle.ObjectiveRegion.PointList.Contains(npc.CurrentLocation)) continue;
 
-            //    npc.Visible = true;
-            //    npc.AddAllObjects();
-            //}
+                npc.Visible = true;
+                npc.AddAllObjects();
+            }
 
             PingPlayers();
 
@@ -86,7 +85,6 @@ namespace Server.Models
             SEnvir.Broadcast(new S.GuildConquestFinished { Index = Castle.Index });
 
             GuildInfo ownerGuild = SEnvir.GuildInfoList.Binding.FirstOrDefault(x => x.Castle == Castle);
-
 
             if (ownerGuild != null)
             {
@@ -103,11 +101,11 @@ namespace Server.Models
                 foreach (GuildMemberInfo member in ownerGuild.Members)
                 {
                     if (member.Account.Connection?.Player == null) continue; //Offline
-                    
+
                     member.Account.Connection.Enqueue(new S.GuildConquestDate { Index = Castle.Index, WarTime = warTime, ObserverPacket = false });
                 }
             }
-            
+
             foreach (GuildInfo participant in Participants)
             {
                 if (participant == ownerGuild) continue;
@@ -154,18 +152,20 @@ namespace Server.Models
                         {
                             MonsterInfo = Castle.Monster,
                             War = this,
+                            Castle = Castle
                         };
 
-                        CastleTarget.Spawn(Castle.CastleRegion, null, 0);
+                        CastleTarget.Spawn(Castle.ObjectiveRegion, null, 0);
                         break;
                     case 1001: //CastleFlag
                         CastleTarget = new CastleFlag
                         {
                             MonsterInfo = Castle.Monster,
                             War = this,
+                            Castle = Castle
                         };
 
-                        CastleTarget.Spawn(Castle.CastleRegion, null, 0);
+                        CastleTarget.Spawn(Castle.ObjectiveRegion, null, 0);
                         break;
                 }
             }
@@ -191,7 +191,7 @@ namespace Server.Models
 
                 Stats[character] = user;
             }
-            
+
             return user;
         }
     }

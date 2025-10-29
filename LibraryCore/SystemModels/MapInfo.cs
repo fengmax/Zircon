@@ -1,10 +1,10 @@
 ﻿using MirDB;
-using System;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace Library.SystemModels
 {
-    public sealed class MapInfo : DBObject
+    public partial class MapInfo : DBObject
     {
         [IsIdentity]
         public string FileName
@@ -36,6 +36,10 @@ namespace Library.SystemModels
             }
         }
         private string _Description;
+
+        [JsonIgnore]
+        [IgnoreProperty]
+        public string PlayerDescription => TrailingSpaceAndNumberRegex().Replace(Description, string.Empty);
 
         [JsonIgnore]
         [IgnoreProperty]
@@ -510,6 +514,9 @@ namespace Library.SystemModels
         //Client Variables
 
         public bool Expanded = true;
+
+        [GeneratedRegex(@"\s\d+$", RegexOptions.Compiled)]
+        public static partial Regex TrailingSpaceAndNumberRegex();
     }
 
 

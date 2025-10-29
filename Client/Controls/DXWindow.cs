@@ -1,12 +1,13 @@
-﻿using System;
+﻿using Client.Envir;
+using Client.Extensions;
+using Client.UserModels;
+using Library;
+using SharpDX.Direct3D9;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
-using Client.Envir;
-using Client.UserModels;
-using Library;
-using SlimDX.Direct3D9;
 using Font = System.Drawing.Font;
 
 //Cleaned
@@ -43,7 +44,7 @@ namespace Client.Controls
         }
 
         #endregion
-        
+
         #region HasTitle
 
         public bool HasTitle
@@ -167,7 +168,7 @@ namespace Client.Controls
         public override void OnVisibleChanged(bool oValue, bool nValue)
         {
             base.OnVisibleChanged(oValue, nValue);
-            
+
             if (IsVisible)
                 BringToFront();
 
@@ -178,7 +179,7 @@ namespace Client.Controls
         public WindowSetting Settings;
 
         #endregion
-        
+
         protected DXWindow()
         {
             Windows.Add(this);
@@ -195,6 +196,8 @@ namespace Client.Controls
                 Parent = this,
                 Index = 15,
                 LibraryFile = LibraryFile.Interface,
+                Hint = CEnvir.Language.CommonControlClose,
+                HintPosition = HintPosition.TopLeft
             };
             CloseButton.MouseClick += (o, e) => Visible = false;
 
@@ -241,7 +244,7 @@ namespace Client.Controls
 
             if (WindowTexture != null)
             {
-                if (!WindowTexture.Disposed)
+                if (!WindowTexture.IsDisposed)
                     WindowTexture.Dispose();
 
                 WindowTexture = null;
@@ -249,7 +252,7 @@ namespace Client.Controls
 
             if (WindowSurface != null)
             {
-                if (!WindowSurface.Disposed)
+                if (!WindowSurface.IsDisposed)
                     WindowSurface.Dispose();
 
                 WindowSurface = null;
@@ -271,7 +274,7 @@ namespace Client.Controls
 
             WindowValid = false;
         }
-        
+
         public override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);
@@ -359,12 +362,12 @@ namespace Client.Controls
         protected void DrawWindow()
         {
             if (InterfaceLibrary == null) return;
-            
+
             if (!WindowValid)
             {
                 Surface oldSurface = DXManager.CurrentSurface;
                 DXManager.SetSurface(WindowSurface);
-                DXManager.Device.Clear(ClearFlags.Target, 0, 0, 0);
+                DXManager.Device.Clear(ClearFlags.Target, Color.FromArgb(0, 0, 0, 0), 0f, 0);
 
                 DrawEdges();
 
@@ -375,11 +378,12 @@ namespace Client.Controls
             float oldOpacity = DXManager.Opacity;
 
             DXManager.SetOpacity(Opacity);
+
             PresentTexture(WindowTexture, Parent, DisplayArea, ForeColour, this);
 
             DXManager.SetOpacity(oldOpacity);
         }
-        
+
         private void DrawEdges()
         {
             Size s;
@@ -550,7 +554,7 @@ namespace Client.Controls
 
                 if (WindowTexture != null)
                 {
-                    if (!WindowTexture.Disposed)
+                    if (!WindowTexture.IsDisposed)
                         WindowTexture.Dispose();
 
                     WindowTexture = null;
@@ -558,7 +562,7 @@ namespace Client.Controls
 
                 if (WindowSurface != null)
                 {
-                    if (!WindowSurface.Disposed)
+                    if (!WindowSurface.IsDisposed)
                         WindowSurface.Dispose();
 
                     WindowSurface = null;

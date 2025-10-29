@@ -1,54 +1,40 @@
-﻿using System;
+﻿using Library;
+using Library.Network;
+using Library.SystemModels;
+using MirDB;
+using Server.DBModels;
+using Server.Envir.Commands;
+using Server.Envir.Commands.Handler;
+using Server.Envir.Events;
+using Server.Envir.Events.Triggers;
+using Server.Models;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
-using Library;
-using Library.Network;
-using Library.SystemModels;
-using MirDB;
-using Server.DBModels;
-using Server.Models;
+using C = Library.Network.ClientPackets;
 using G = Library.Network.GeneralPackets;
 using S = Library.Network.ServerPackets;
-using C = Library.Network.ClientPackets;
-using System.Reflection;
-using System.Globalization;
-using Server.Envir.Commands.Handler;
-using Server.Envir.Commands;
-using Server.Models.Magics;
-using System.Numerics;
 
 namespace Server.Envir
 {
     public static class SEnvir
     {
-        #region Synchronization
-
-        private static readonly SynchronizationContext Context = SynchronizationContext.Current;
-        public static void Send(SendOrPostCallback method)
-        {
-            Context.Send(method, null);
-        }
-        public static void Post(SendOrPostCallback method)
-        {
-            Context.Post(method, null);
-        }
-
-        #endregion
-
         #region Logging
 
-        public static ConcurrentQueue<string> DisplayLogs = new ConcurrentQueue<string>();
-        public static ConcurrentQueue<string> Logs = new ConcurrentQueue<string>();
+        public static ConcurrentQueue<string> DisplayLogs = [];
+        public static ConcurrentQueue<string> Logs = [];
         public static bool UseLogConsole = false;
 
         public static void Log(string log, bool hardLog = true)
@@ -220,8 +206,6 @@ namespace Server.Envir
 
         #endregion
 
-
-
         public static bool Started { get; set; }
         public static bool NetworkStarted { get; set; }
         public static bool Saving { get; private set; }
@@ -241,6 +225,8 @@ namespace Server.Envir
         );
 
         public static bool ServerBuffChanged;
+
+        public static EventInfoHandler EventHandler = new EventInfoHandler();
 
         #region Database
 
@@ -302,6 +288,11 @@ namespace Server.Envir
         public static DBCollection<UserFortuneInfo> UserFortuneInfoList;
         public static DBCollection<WeaponCraftStatInfo> WeaponCraftStatInfoList;
         public static DBCollection<UserDiscipline> UserDisciplineList;
+        public static DBCollection<BundleInfo> BundleInfoList;
+        public static DBCollection<LootBoxInfo> LootBoxInfoList;
+
+        public static DBCollection<WorldEventTrigger> WorldEventInfoTriggerList;
+        public static DBCollection<PlayerEventTrigger> PlayerEventInfoTriggerList;
 
         public static ItemInfo GoldInfo, RefinementStoneInfo, FragmentInfo, Fragment2Info, Fragment3Info, FortuneCheckerInfo, ItemPartInfo;
 
@@ -309,9 +300,9 @@ namespace Server.Envir
 
         public static MapRegion MysteryShipMapRegion, LairMapRegion;
 
-        public static List<MonsterInfo> BossList = new List<MonsterInfo>();
+        public static List<MonsterInfo> BossList = [];
 
-        public static List<Type> MagicTypes = new List<Type>();
+        public static List<Type> MagicTypes = [];
 
         #endregion
 
@@ -319,20 +310,35 @@ namespace Server.Envir
 
         public static Random Random;
 
-        public static Dictionary<MapInfo, Map> Maps = new Dictionary<MapInfo, Map>();
-        public static Dictionary<InstanceInfo, Dictionary<MapInfo, Map>[]> Instances = new Dictionary<InstanceInfo, Dictionary<MapInfo, Map>[]>();
+        public static Dictionary<MapInfo, Map> Maps = [];
+        public static Dictionary<InstanceInfo, Dictionary<MapInfo, Map>[]> Instances = [];
 
         private static long _ObjectID;
         public static uint ObjectID => (uint)Interlocked.Increment(ref _ObjectID);
 
-        public static LinkedList<MapObject> Objects = new LinkedList<MapObject>();
-        public static List<MapObject> ActiveObjects = new List<MapObject>();
+        public static LinkedList<MapObject> Objects = [];
+        public static List<MapObject> ActiveObjects = [];
 
-        public static List<PlayerObject> Players = new List<PlayerObject>();
-        public static List<ConquestWar> ConquestWars = new List<ConquestWar>();
+        public static List<PlayerObject> Players = [];
+        public static List<ConquestWar> ConquestWars = [];
 
-        public static List<SpawnInfo> Spawns = new List<SpawnInfo>();
+        public static List<SpawnInfo> Spawns = [];
 
+        public static List<EventLog> EventLogs = [];
+
+        private static TimeOfDay _TimeOfDay;
+        public static TimeOfDay TimeOfDay
+        {
+            get { return _TimeOfDay; }
+            set
+            {
+                if (_TimeOfDay == value) return;
+
+                _TimeOfDay = value;
+            }
+        }
+
+        public static float PreviousDayTime { get; private set; }
         private static float _DayTime;
         public static float DayTime
         {
@@ -341,6 +347,7 @@ namespace Server.Envir
             {
                 if (_DayTime == value) return;
 
+                PreviousDayTime = _DayTime;
                 _DayTime = value;
 
                 Broadcast(new S.DayChanged { DayTime = DayTime });
@@ -472,6 +479,11 @@ namespace Server.Envir
             UserFortuneInfoList = Session.GetCollection<UserFortuneInfo>();
             WeaponCraftStatInfoList = Session.GetCollection<WeaponCraftStatInfo>();
             UserDisciplineList = Session.GetCollection<UserDiscipline>();
+            BundleInfoList = Session.GetCollection<BundleInfo>();
+            LootBoxInfoList = Session.GetCollection<LootBoxInfo>();
+
+            WorldEventInfoTriggerList = Session.GetCollection<WorldEventTrigger>();
+            PlayerEventInfoTriggerList = Session.GetCollection<PlayerEventTrigger>();
 
             GoldInfo = CurrencyInfoList.Binding.First(x => x.Type == CurrencyType.Gold).DropItem;
 
@@ -689,9 +701,15 @@ namespace Server.Envir
         {
             foreach (MovementInfo movement in MovementInfoList.Binding)
             {
+                if (movement.SourceRegion == null && movement.DestinationRegion == null)
+                {
+                    Log($"[Movement] No Source or Destination Region, Index: {movement.Index}");
+                    continue;
+                }
+
                 if (movement.SourceRegion == null)
                 {
-                    Log($"[Movement] No Source Region, Source: {movement.SourceRegion.ServerDescription}");
+                    Log($"[Movement] No Source Region, Destination: {movement.DestinationRegion.ServerDescription}");
                     continue;
                 }
 
@@ -709,7 +727,7 @@ namespace Server.Envir
 
                 if (movement.DestinationRegion == null)
                 {
-                    Log($"[Movement] No Destinaton Region, Source: {movement.SourceRegion.ServerDescription}");
+                    Log($"[Movement] No Destination Region, Source: {movement.SourceRegion.ServerDescription}");
                     continue;
                 }
 
@@ -734,13 +752,17 @@ namespace Server.Envir
                     }
                 }
 
-                foreach (Point sPoint in movement.SourceRegion.PointList)
+                foreach (Point sPoint in movement.SourceRegion.PointRegion)
                 {
                     Cell source = sourceMap.GetCell(sPoint);
 
                     if (source == null)
                     {
-                        Log($"[Movement] Bad Origin, Source: {movement.SourceRegion.ServerDescription}, X:{sPoint.X}, Y:{sPoint.Y}");
+                        if (!movement.SkipValidation)
+                        {
+                            Log($"[Movement] Bad Origin, Source: {movement.SourceRegion.ServerDescription}, X:{sPoint.X}, Y:{sPoint.Y}");
+                        }
+
                         continue;
                     }
 
@@ -842,23 +864,23 @@ namespace Server.Envir
 
                 map.HasSafeZone = true;
 
-                if (info.Border)
+                HashSet<Point> edges = new HashSet<Point>();
+
+                foreach (Point point in info.Region.PointList)
                 {
-                    HashSet<Point> edges = new HashSet<Point>();
+                    Cell cell = map.GetCell(point);
 
-                    foreach (Point point in info.Region.PointList)
+                    if (cell == null)
                     {
-                        Cell cell = map.GetCell(point);
+                        Log($"[Safe Zone] Bad Location, Region: {info.Region.ServerDescription}, X: {point.X}, Y: {point.Y}.");
 
-                        if (cell == null)
-                        {
-                            Log($"[Safe Zone] Bad Location, Region: {info.Region.ServerDescription}, X: {point.X}, Y: {point.Y}.");
+                        continue;
+                    }
 
-                            continue;
-                        }
+                    cell.SafeZone = info;
 
-                        cell.SafeZone = info;
-
+                    if (info.Border)
+                    {
                         for (int i = 0; i < 8; i++)
                         {
                             Point test = Functions.Move(point, (MirDirection)i);
@@ -870,20 +892,20 @@ namespace Server.Envir
                             edges.Add(test);
                         }
                     }
+                }
 
-                    foreach (Point point in edges)
+                foreach (Point point in edges)
+                {
+                    SpellObject ob = new SpellObject
                     {
-                        SpellObject ob = new SpellObject
-                        {
-                            Visible = true,
-                            DisplayLocation = point,
-                            TickCount = 10,
-                            TickFrequency = TimeSpan.FromDays(365),
-                            Effect = SpellEffect.SafeZone
-                        };
+                        Visible = true,
+                        DisplayLocation = point,
+                        TickCount = 10,
+                        TickFrequency = TimeSpan.FromDays(365),
+                        Effect = SpellEffect.SafeZone
+                    };
 
-                        ob.Spawn(map, point);
-                    }
+                    ob.Spawn(map, point);
                 }
 
                 if (info.BindRegion == null || instance != null) continue;
@@ -985,6 +1007,9 @@ namespace Server.Envir
             SetInfoList = null;
             UserDisciplineList = null;
 
+            WorldEventInfoTriggerList = null;
+            PlayerEventInfoTriggerList = null;
+
             Rankings = null;
             Random = null;
 
@@ -1017,7 +1042,7 @@ namespace Server.Envir
             Started = NetworkStarted;
 
             int count = 0, loopCount = 0;
-            DateTime nextCount = Now.AddSeconds(1), UserCountTime = Now.AddMinutes(5), saveTime;
+            DateTime nextCount = Now.AddSeconds(1), UserCountTime = Now.AddMinutes(5), EventTimerTime = Now.AddMinutes(1), saveTime;
             long previousTotalSent = 0, previousTotalReceived = 0;
             int lastindex = 0;
             long conDelay = 0;
@@ -1158,6 +1183,18 @@ namespace Server.Envir
                             }
                         }
 
+                        if (Now >= EventTimerTime)
+                        {
+                            EventTimerTime = Now.AddMinutes(1);
+
+                            foreach (var timer in EventTimer.Timers)
+                            {
+                                if (!timer.Started) continue;
+
+                                EventHandler.Process(timer.Player, "TIMERMINUTE");
+                            }
+                        }
+
                         CalculateLights();
 
                         CheckGuildWars();
@@ -1173,7 +1210,7 @@ namespace Server.Envir
 
                                 if (instance.Value[instanceSequence] == null) continue;
 
-                                foreach (KeyValuePair<MapInfo, Map> pair in instance.Value[instanceSequence]) 
+                                foreach (KeyValuePair<MapInfo, Map> pair in instance.Value[instanceSequence])
                                 {
                                     pair.Value.Process();
 
@@ -1504,10 +1541,39 @@ namespace Server.Envir
             }
 
         }
+
         public static void CalculateLights()
         {
             DayTime = Math.Max(0.05F, Math.Abs((float)Math.Round(((Now.TimeOfDay.TotalMinutes * Config.DayCycleCount) % 1440) / 1440F * 2 - 1, 2))); //12 hour rotation
+
+            var previousTimeOfDay = TimeOfDay;
+
+            if (DayTime <= 0.35F)
+            {
+                TimeOfDay = TimeOfDay.Night;
+            }
+            else if (DayTime > 0.65F)
+            {
+                TimeOfDay = TimeOfDay.Day;
+            }
+            else
+            {
+                if (DayTime > PreviousDayTime)
+                {
+                    TimeOfDay = TimeOfDay.Dawn;
+                }
+                else
+                {
+                    TimeOfDay = TimeOfDay.Dusk;
+                }
+            }
+
+            if (previousTimeOfDay != TimeOfDay)
+            {
+                SEnvir.EventHandler.Process("TIMEOFDAY");
+            }
         }
+
         public static void StartConquest(CastleInfo info, bool forced)
         {
             List<GuildInfo> participants = new List<GuildInfo>();
@@ -1549,19 +1615,6 @@ namespace Server.Envir
 
             War.StartWar();
         }
-        public static void StartConquest(CastleInfo info, List<GuildInfo> participants)
-        {
-            ConquestWar War = new ConquestWar
-            {
-                Castle = info,
-                Participants = participants,
-                EndTime = Now + TimeSpan.FromMinutes(15),
-                StartTime = Now.Date + info.StartTime,
-            };
-
-            War.StartWar();
-        }
-
 
         public static UserItem CreateFreshItem(UserItem item)
         {
@@ -1667,6 +1720,12 @@ namespace Server.Envir
                     case ItemType.Shoes:
                         UpgradeShoes(item);
                         break;
+                    case ItemType.Bundle:
+                        UpgradeBundle(item);
+                        break;
+                    case ItemType.LootBox:
+                        UpgradeLootBox(item);
+                        break;
                 }
                 item.StatsChanged();
             }
@@ -1707,6 +1766,11 @@ namespace Server.Envir
                     return ItemInfoList[i];
 
             return null;
+        }
+
+        public static MagicInfo GetMagicInfo(int index)
+        {
+            return MagicInfoList.Binding.FirstOrDefault(magic => magic.Index == index);
         }
 
         public static MonsterInfo GetMonsterInfo(string name)
@@ -2676,6 +2740,25 @@ namespace Server.Envir
 
                 item.AddStat(element, -1, StatSource.Added);
             }
+        }
+
+        public static void UpgradeBundle(UserItem item)
+        {
+            item.AddStat(Stat.Random1, Random.Next(byte.MaxValue), StatSource.Added); // Full randomise
+        }
+
+        public static void UpgradeLootBox(UserItem item)
+        {
+            var lootBoxInfo = SEnvir.LootBoxInfoList.Binding.FirstOrDefault(x => x.Index == item.Info.Shape);
+
+            if (lootBoxInfo == null) return;
+
+            item.AddStat(Stat.Random1, Random.Next(byte.MaxValue), StatSource.Added); // Full randomise
+            item.AddStat(Stat.Random2, Random.Next(byte.MaxValue), StatSource.Added); // Loot Box grid randomise
+
+            item.AddStat(Stat.Counter1, Globals.LootBoxRerollCount, StatSource.Added);
+
+            item.AddStat(Stat.Counter2, lootBoxInfo.Contents.Count <= 15 ? 2 : 1, StatSource.Added); // Step 1 = Randomise, 2 = Selection
         }
 
         public static void Login(C.Login p, SConnection con)
@@ -3675,14 +3758,28 @@ namespace Server.Envir
                 {
                     if (instance.ReconnectRegion != null && map.Players[i].Teleport(instance.ReconnectRegion, null, 0))
                     {
+                        continue;
                     }
-                    else if (map.Players[i].Teleport(map.Players[i].Character.BindPoint.BindRegion, null, 0))
+
+                    if (map.Info.ReconnectMap != null)
                     {
+                        var reconnectMap = GetMap(map.Info.ReconnectMap);
+                        if (map.Players[i].Teleport(reconnectMap, reconnectMap.GetRandomLocation()))
+                        {
+                            continue;
+                        }
+                    }
+
+                    if (map.Players[i].Teleport(map.Players[i].Character.BindPoint.BindRegion, null, 0))
+                    {
+                        continue;
                     }
                 }
             }
 
             RemoveSpawns(instance, instanceSequence);
+
+            EventLogs.RemoveAll(x => x.InstanceInfo == instance && x.InstanceSequence == instanceSequence);
 
             Instances[instance][instanceSequence] = null;
 

@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Library;
-using Library.SystemModels;
-using Server.DBModels;
+﻿using Library;
 using Server.Envir;
+using System;
+using System.Collections.Generic;
 using S = Library.Network.ServerPackets;
 
 namespace Server.Models.Monsters
@@ -31,7 +28,7 @@ namespace Server.Models.Monsters
 
             Stage = MaxStage;
         }
-        
+
         public override void Process()
         {
             base.Process();
@@ -49,7 +46,7 @@ namespace Server.Models.Monsters
 
             SpawnMinions(MinSpawn, RandomSpawn, Target);
         }
-        
+
 
         public override void ProcessTarget()
         {

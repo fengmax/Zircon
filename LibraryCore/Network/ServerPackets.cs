@@ -153,6 +153,14 @@ namespace Library.Network.ServerPackets
         public MirDirection Direction { get; set; }
         public Point Location { get; set; }
     }
+    public sealed class ObjectIdle : Packet
+    {
+        public uint ObjectID { get; set; }
+        public MirDirection Direction { get; set; }
+        public Point Location { get; set; }
+        public int Type { get; set; }
+    }
+
     public sealed class ObjectAttack : Packet
     {
         public uint ObjectID { get; set; }
@@ -251,6 +259,7 @@ namespace Library.Network.ServerPackets
     {
         public uint ObjectID { get; set; }
         public BuffType Type { get; set; }
+        public int Extra { get;set; }
     }
     public sealed class ObjectBuffRemove : Packet
     {
@@ -296,7 +305,7 @@ namespace Library.Network.ServerPackets
         public bool Dead { get; set; }
         public PoisonType Poison { get; set; }
 
-        public List<BuffType> Buffs { get; set; }
+        public Dictionary<BuffType, int> Buffs { get; set; }
 
         public HorseType Horse { get; set; }
 
@@ -330,7 +339,7 @@ namespace Library.Network.ServerPackets
         public bool HalloweenEvent { get; set; }
         public bool ChristmasEvent { get; set; }
 
-        public List<BuffType> Buffs { get; set; }
+        public Dictionary<BuffType, int> Buffs { get; set; }
         public bool Extra { get; set; }
 
         public int Extra1 { get; set; }
@@ -609,6 +618,7 @@ namespace Library.Network.ServerPackets
         public string Text { get; set; }
         public MessageType Type { get; set; }
         public List<ClientUserItem> LinkedItems { get; set; }
+        public bool OverheadOnly { get; set; }
     }
 
     public sealed class NPCResponse : Packet
@@ -1104,6 +1114,10 @@ namespace Library.Network.ServerPackets
     {
         public int Index { get; set; }
     }
+    public sealed class CompanionRelease : Packet
+    {
+        public int Index { get; set; }
+    }
     public sealed class CompanionStore : Packet
     {
     }
@@ -1139,7 +1153,6 @@ namespace Library.Network.ServerPackets
         public Stats Level13 { get; set; }
         public Stats Level15 { get; set; }
     }
-
 
     public sealed class MarriageInvite : Packet
     {
@@ -1357,6 +1370,28 @@ namespace Library.Network.ServerPackets
         public string Key { get; set; }
         public byte Type { get; set; }
         public int Seconds { get; set; }
+    }
+
+    public sealed class LootBoxOpen : Packet
+    {
+        public int Slot { get; set; }
+        public List<ClientLootBoxItemInfo> Items { get; set; }
+    }
+
+    public sealed class LootBoxClose : Packet
+    {
+
+    }
+
+    public sealed class BundleOpen : Packet
+    {
+        public int Slot { get; set; }
+        public List<ClientBundleItemInfo> Items { get; set; }
+    }
+
+    public sealed class BundleClose : Packet
+    {
+
     }
 }
 

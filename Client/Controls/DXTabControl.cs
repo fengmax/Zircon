@@ -1,17 +1,18 @@
 ﻿using Client.Envir;
 using Library;
-using SlimDX;
-using SlimDX.Direct3D9;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Numerics;
+using Client.Extensions;
+using SharpDX.Direct3D9;
 
 namespace Client.Controls
 {
     public class DXTabControl : DXControl
     {
         #region Properties
-        
+
         #region SelectedTab
 
         public DXTab SelectedTab
@@ -116,7 +117,7 @@ namespace Client.Controls
         }
 
         #region Methods
-        
+
         public void SetNewTab()
         {
             if (IsDisposed) return;
@@ -134,7 +135,7 @@ namespace Client.Controls
 
             _SelectedTab = null;
         }
-        
+
         public void TabsChanged()
         {
             if (SelectedTab == null)
@@ -144,7 +145,7 @@ namespace Client.Controls
                     DXTab tab = control as DXTab;
 
                     if (tab == null || tab == SelectedTab) continue;
-                    
+
                     SelectedTab = tab;
                     break;
                 }
@@ -174,7 +175,7 @@ namespace Client.Controls
 
                 if (!control.RightAligned) continue;
 
-            //    control.Visible = true;
+                //    control.Visible = true;
                 control.Location = new Point(Size.Width - width, 0);
                 width -= control.Size.Width + 1;
             }
@@ -427,7 +428,7 @@ namespace Client.Controls
 
         }
         #endregion
-        
+
         public DXTab()
         {
             Location = new Point(0, TabHeight - 1);
@@ -478,7 +479,7 @@ namespace Client.Controls
                     {
                         Parent = TabButton.Parent.Parent,
                         Location = new Point(TabButton.DisplayArea.X - ActiveScene.Location.X, TabButton.DisplayArea.Y - ActiveScene.Location.Y),
-                        Visible =  true,
+                        Visible = true,
 
                         PassThrough = TabButton.Parent.PassThrough,
                         Size = TabButton.Parent.Size,
@@ -616,7 +617,7 @@ namespace Client.Controls
 
             Surface oldSurface = DXManager.CurrentSurface;
             DXManager.SetSurface(DXManager.ScratchSurface);
-            DXManager.Device.Clear(ClearFlags.Target, 0, 0, 0);
+            DXManager.Device.Clear(ClearFlags.Target, Color.FromArgb(0, 0, 0, 0), 0f, 0);
 
             DrawEdges();
 

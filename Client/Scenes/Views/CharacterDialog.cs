@@ -12,7 +12,6 @@ using System.Drawing;
 using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
-using static System.Net.Mime.MediaTypeNames;
 using C = Library.Network.ClientPackets;
 using S = Library.Network.ServerPackets;
 
@@ -289,6 +288,8 @@ namespace Client.Scenes.Views
                 Parent = this,
                 Index = 15,
                 LibraryFile = LibraryFile.Interface,
+                Hint = CEnvir.Language.CommonControlClose,
+                HintPosition = HintPosition.TopLeft
             };
             CloseButton.Location = new Point(DisplayArea.Width - CloseButton.Size.Width - 3, 3);
             CloseButton.MouseClick += (o, e) => Visible = false;
@@ -354,7 +355,7 @@ namespace Client.Scenes.Views
                 ForeColour = Color.FromArgb(222, 255, 222),
                 Outline = false,
                 Parent = namePanel,
-                Font = new Font(Config.FontName, CEnvir.FontSize(9F), FontStyle.Bold),
+                Font = new System.Drawing.Font(Config.FontName, CEnvir.FontSize(9F), FontStyle.Bold),
                 DrawFormat = TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter
             };
             GuildNameLabel = new DXLabel
@@ -658,7 +659,7 @@ namespace Client.Scenes.Views
             {
                 Parent = StatsTabControl,
                 TabButton =
-                { 
+                {
                     Label =
                     {
                         Text = CEnvir.Language.CharacterCharacterTabStatsAttackTabLabel
@@ -674,7 +675,7 @@ namespace Client.Scenes.Views
             {
                 Parent = StatsTabControl,
                 TabButton =
-                { 
+                {
                     Label =
                     {
                         Text = CEnvir.Language.CharacterCharacterTabStatsDefenseTabLabel
@@ -689,7 +690,7 @@ namespace Client.Scenes.Views
             {
                 Parent = StatsTabControl,
                 TabButton =
-                { 
+                {
                     Label =
                     {
                         Text = CEnvir.Language.CharacterCharacterTabStatsWeightTabLabel
@@ -704,10 +705,10 @@ namespace Client.Scenes.Views
             {
                 Parent = StatsTabControl,
                 TabButton =
-                { 
+                {
                     Label =
                     {
-                        Text = CEnvir.Language.CharacterCharacterTabStatsOtherTabLabel            
+                        Text = CEnvir.Language.CharacterCharacterTabStatsOtherTabLabel
                     },
                     Hint = CEnvir.Language.CharacterCharacterTabStatsOtherTabHint
                 },
@@ -719,10 +720,10 @@ namespace Client.Scenes.Views
             {
                 Parent = StatsTabControl,
                 TabButton =
-                { 
+                {
                     Label =
                     {
-                        Text = CEnvir.Language.CharacterCharacterTabStatsElementAttackTabLabel    
+                        Text = CEnvir.Language.CharacterCharacterTabStatsElementAttackTabLabel
                     },
                     Hint = CEnvir.Language.CharacterCharacterTabStatsElementAttackTabHint
                 },
@@ -734,10 +735,10 @@ namespace Client.Scenes.Views
             {
                 Parent = StatsTabControl,
                 TabButton =
-                { 
+                {
                     Label =
                     {
-                        Text = CEnvir.Language.CharacterCharacterTabStatsElementAdvantageTabLabel    
+                        Text = CEnvir.Language.CharacterCharacterTabStatsElementAdvantageTabLabel
                     },
                     Hint = CEnvir.Language.CharacterCharacterTabStatsElementAdvantageTabHint
                 },
@@ -748,11 +749,11 @@ namespace Client.Scenes.Views
             StatsElementDisadvantageTab = new DXTab
             {
                 Parent = StatsTabControl,
-                TabButton = 
-                { 
-                    Label = 
-                    { 
-                        Text = CEnvir.Language.CharacterCharacterTabStatsElementDisadvantageTabLabel                
+                TabButton =
+                {
+                    Label =
+                    {
+                        Text = CEnvir.Language.CharacterCharacterTabStatsElementDisadvantageTabLabel
                     },
                     Hint = CEnvir.Language.CharacterCharacterTabStatsElementDisadvantageTabHint
                 },
@@ -2549,13 +2550,15 @@ namespace Client.Scenes.Views
                 if (Class == MirClass.Assassin && Gender == MirGender.Female && HairType == 1 && Grid[(int)EquipmentSlot.Helmet].Item == null)
                     library.Draw(1160, DisplayArea.X + x, DisplayArea.Y + y, HairColour, true, 1F, ImageType.Image);
 
+                int index = Gender == MirGender.Male ? 0 : 1;
+
                 switch (Gender)
                 {
                     case MirGender.Male:
-                        library.Draw(0, DisplayArea.X + x, DisplayArea.Y + y, Color.White, true, 1F, ImageType.Image);
+                        library.Draw(index, DisplayArea.X + x, DisplayArea.Y + y, Color.White, true, 1F, ImageType.Image);
                         break;
                     case MirGender.Female:
-                        library.Draw(1, DisplayArea.X + x, DisplayArea.Y + y, Color.White, true, 1F, ImageType.Image);
+                        library.Draw(index, DisplayArea.X + x, DisplayArea.Y + y, Color.White, true, 1F, ImageType.Image);
                         break;
                 }
             }
@@ -3331,7 +3334,7 @@ namespace Client.Scenes.Views
             KeyLabel = new DXLabel
             {
                 Parent = Image,
-                Font = new Font(Config.FontName, CEnvir.FontSize(10F), FontStyle.Bold),
+                Font = new System.Drawing.Font(Config.FontName, CEnvir.FontSize(10F), FontStyle.Bold),
                 IsControl = false,
                 ForeColour = Color.Aquamarine,
                 AutoSize = false,

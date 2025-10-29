@@ -1,12 +1,12 @@
-﻿using System;
+﻿using Client.Envir;
+using SharpDX.Direct3D9;
+using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
-using Client.Envir;
-using SlimDX;
-using SlimDX.Direct3D9;
 using Font = System.Drawing.Font;
+using DataRectangle = SharpDX.DataRectangle;
 
 //Cleaned
 namespace Client.Controls
@@ -65,7 +65,7 @@ namespace Client.Controls
         }
 
         #endregion
-        
+
         #region Font
 
         public Font Font
@@ -141,7 +141,7 @@ namespace Client.Controls
         }
 
         #endregion
-        
+
         #region Password
 
         public bool Password
@@ -302,16 +302,15 @@ namespace Client.Controls
 
             DataRectangle rect = ControlTexture.LockRectangle(0, LockFlags.Discard);
 
-            using (Bitmap image = new Bitmap(DisplayArea.Width, DisplayArea.Height, rect.Pitch, PixelFormat.Format32bppArgb, rect.Data.DataPointer))
+            using (Bitmap image = new Bitmap(DisplayArea.Width, DisplayArea.Height, rect.Pitch, PixelFormat.Format32bppArgb, rect.DataPointer))
                 TextBox.DrawToBitmap(image, new Rectangle(Point.Empty, Size.Round(DisplayArea.Size)));
 
             ControlTexture.UnlockRectangle(0);
-            rect.Data.Dispose();
 
             TextureValid = true;
             ExpireTime = CEnvir.Now + Config.CacheDuration;
         }
-        
+
         public virtual void OnActivated()
         {
             if (TextBox.Visible != Editable)
@@ -364,7 +363,7 @@ namespace Client.Controls
         {
             base.OnMouseDown(e);
 
-            if (!TextBox.Visible ) return;
+            if (!TextBox.Visible) return;
 
             int location = (e.X - DisplayArea.X) | (e.Y - DisplayArea.Y) << 16;
 
@@ -456,7 +455,7 @@ namespace Client.Controls
             ExpireTime = CEnvir.Now + Config.CacheDuration;
         }
         #endregion
-        
+
         #region IDisposable
         protected override void Dispose(bool disposing)
         {
@@ -487,7 +486,7 @@ namespace Client.Controls
                 FontChanged = null;
                 KeepFocusChanged = null;
                 MaxLengthChanged = null;
-                PasswordChanged = null; 
+                PasswordChanged = null;
                 ReadOnlyChanged = null;
                 TextBoxChanged = null;
             }
@@ -501,7 +500,7 @@ namespace Client.Controls
             #region Properties
             public DXTextBox Owner;
             #endregion
-            
+
             public MirTextBox(DXTextBox owner)
             {
                 Owner = owner;

@@ -1,8 +1,8 @@
-﻿using System;
-using Library;
+﻿using Library;
 using Library.SystemModels;
 using MirDB;
 using Server.Envir;
+using System;
 
 namespace Server.DBModels
 {
@@ -130,6 +130,22 @@ namespace Server.DBModels
         }
         private long _Experience;
 
+        public bool ItemRequired
+        {
+            get { return _ItemRequired; }
+            set
+            {
+                if (_ItemRequired == value)
+                {
+                    return;
+                }
+                var oldValue = _ItemRequired;
+                _ItemRequired = value;
+                OnChanged(oldValue, value, "ItemRequired");
+            }
+        }
+        private bool _ItemRequired;
+
         [Association("DisciplineMagics")]
         public UserDiscipline Discipline
         {
@@ -147,7 +163,7 @@ namespace Server.DBModels
         private UserDiscipline _Discipline;
 
         public DateTime Cooldown;
-        
+
         [IgnoreProperty]
         public int Cost => Info.BaseCost + Level * Info.LevelCost / 3;
 
@@ -177,7 +193,7 @@ namespace Server.DBModels
             {
                 Index = Index,
                 InfoIndex = Info.Index,
-              
+
                 Set1Key = Set1Key,
                 Set2Key = Set2Key,
                 Set3Key = Set3Key,
@@ -185,6 +201,7 @@ namespace Server.DBModels
 
                 Level = Level,
                 Experience = Experience,
+                ItemRequired = ItemRequired,
 
                 Cooldown = Cooldown > SEnvir.Now ? Cooldown - SEnvir.Now : TimeSpan.Zero,
             };

@@ -1,16 +1,17 @@
-﻿
-using Client.Envir;
+﻿using Client.Envir;
 using Client.Models.Player;
 using Client.Scenes;
 using Library;
-using SlimDX;
-using SlimDX.Direct3D9;
+using SharpDX.Direct3D9;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Numerics;
 using Frame = Library.Frame;
 using S = Library.Network.ServerPackets;
+using Client.Extensions;
+using Matrix = SharpDX.Matrix;
 
 namespace Client.Models
 {
@@ -110,6 +111,8 @@ namespace Client.Models
             [12] = LibraryFile.M_Helmet13,
             [13] = LibraryFile.M_Helmet14,
 
+            [20] = LibraryFile.M_HelmetCx1,
+
             [0 + FemaleOffSet] = LibraryFile.WM_Helmet1,
             [1 + FemaleOffSet] = LibraryFile.WM_Helmet2,
             [2 + FemaleOffSet] = LibraryFile.WM_Helmet3,
@@ -121,15 +124,21 @@ namespace Client.Models
             [12 + FemaleOffSet] = LibraryFile.WM_Helmet13,
             [13 + FemaleOffSet] = LibraryFile.WM_Helmet14,
 
+            [20 + FemaleOffSet] = LibraryFile.WM_HelmetCx1,
+
             [0 + AssassinOffSet] = LibraryFile.M_HelmetA1,
             [1 + AssassinOffSet] = LibraryFile.M_HelmetA2,
             [2 + AssassinOffSet] = LibraryFile.M_HelmetA3,
             [3 + AssassinOffSet] = LibraryFile.M_HelmetA4,
 
+            [20 + AssassinOffSet] = LibraryFile.M_HelmetACx1,
+
             [0 + AssassinOffSet + FemaleOffSet] = LibraryFile.WM_HelmetA1,
             [1 + AssassinOffSet + FemaleOffSet] = LibraryFile.WM_HelmetA2,
             [2 + AssassinOffSet + FemaleOffSet] = LibraryFile.WM_HelmetA3,
             [3 + AssassinOffSet + FemaleOffSet] = LibraryFile.WM_HelmetA4,
+
+            [20 + AssassinOffSet + FemaleOffSet] = LibraryFile.WM_HelmetACx1,
         };
         #endregion
 
@@ -146,6 +155,7 @@ namespace Client.Models
             [12] = LibraryFile.M_HumEx12,
             [13] = LibraryFile.M_HumEx13,
 
+            [20] = LibraryFile.M_HumCx1,
 
             [0 + FemaleOffSet] = LibraryFile.WM_Hum,
             [1 + FemaleOffSet] = LibraryFile.WM_HumEx1,
@@ -157,16 +167,21 @@ namespace Client.Models
             [12 + FemaleOffSet] = LibraryFile.WM_HumEx12,
             [13 + FemaleOffSet] = LibraryFile.WM_HumEx13,
 
+            [20 + FemaleOffSet] = LibraryFile.WM_HumCx1,
 
             [0 + AssassinOffSet] = LibraryFile.M_HumA,
             [1 + AssassinOffSet] = LibraryFile.M_HumAEx1,
             [2 + AssassinOffSet] = LibraryFile.M_HumAEx2,
             [3 + AssassinOffSet] = LibraryFile.M_HumAEx3,
 
+            [20 + AssassinOffSet] = LibraryFile.M_HumACx1,
+
             [0 + AssassinOffSet + FemaleOffSet] = LibraryFile.WM_HumA,
             [1 + AssassinOffSet + FemaleOffSet] = LibraryFile.WM_HumAEx1,
             [2 + AssassinOffSet + FemaleOffSet] = LibraryFile.WM_HumAEx2,
             [3 + AssassinOffSet + FemaleOffSet] = LibraryFile.WM_HumAEx3,
+
+            [20 + AssassinOffSet + FemaleOffSet] = LibraryFile.WM_HumACx1
         };
         #endregion
 
@@ -215,7 +230,7 @@ namespace Client.Models
         public int HelmetShape;
 
         public int HairFrame => DrawFrame + (HairType - 1) * HairTypeOffSet;
-        public int HelmetFrame => DrawFrame + ((HelmetShape % 10) - 1) * ArmourShapeOffSet + ArmourShift;
+        public int HelmetFrame => DrawFrame + ((HelmetShape - 1) % 10) * ArmourShapeOffSet + ArmourShift;
 
         public MirLibrary WeaponLibrary1, WeaponLibrary2;
         public int WeaponShapeOffSet;
@@ -270,8 +285,13 @@ namespace Client.Models
 
             Poison = info.Poison;
 
-            foreach (BuffType type in info.Buffs)
-                VisibleBuffs.Add(type);
+            foreach (BuffType type in info.Buffs.Keys)
+            {
+                if (!VisibleBuffs.ContainsKey(type))
+                    VisibleBuffs[type] = 0;
+
+                VisibleBuffs[type] = info.Buffs[type];
+            }
 
             Title = info.GuildName;
 
@@ -382,7 +402,6 @@ namespace Client.Models
                                 file = LibraryFile.M_Hum;
                                 ArmourShape = 0;
                             }
-
                             if (CostumeShape >= 0)
                             {
                                 if (!CostumeList.TryGetValue(CostumeShape / 10, out file))
@@ -396,7 +415,8 @@ namespace Client.Models
 
                             CEnvir.LibraryList.TryGetValue(LibraryFile.M_Hair, out HairLibrary);
 
-                            if (!HelmetList.TryGetValue(HelmetShape / 10, out file)) file = LibraryFile.None;
+                            if (!HelmetList.TryGetValue((HelmetShape - 1) / 10, out file)) file = LibraryFile.None;
+
                             CEnvir.LibraryList.TryGetValue(file, out HelmetLibrary);
 
                             if (!WeaponList.TryGetValue(LibraryWeaponShape / 10, out file)) file = LibraryFile.None;
@@ -409,6 +429,7 @@ namespace Client.Models
                             }
                             break;
                         case MirGender.Female:
+
                             if (!ArmourList.TryGetValue(ArmourShape / 11 + FemaleOffSet, out file))
                             {
                                 file = LibraryFile.WM_Hum;
@@ -428,7 +449,7 @@ namespace Client.Models
 
                             CEnvir.LibraryList.TryGetValue(LibraryFile.WM_Hair, out HairLibrary);
 
-                            if (!HelmetList.TryGetValue(HelmetShape / 10 + FemaleOffSet, out file)) file = LibraryFile.None;
+                            if (!HelmetList.TryGetValue(((HelmetShape - 1) / 10) + FemaleOffSet, out file)) file = LibraryFile.None;
                             CEnvir.LibraryList.TryGetValue(file, out HelmetLibrary);
 
                             if (!WeaponList.TryGetValue(LibraryWeaponShape / 10 + FemaleOffSet, out file)) file = LibraryFile.None;
@@ -468,7 +489,7 @@ namespace Client.Models
                             CEnvir.LibraryList.TryGetValue(file, out BodyLibrary);
                             CEnvir.LibraryList.TryGetValue(LibraryFile.M_HairA, out HairLibrary);
 
-                            if (!HelmetList.TryGetValue(HelmetShape / 10 + AssassinOffSet, out file)) file = LibraryFile.None;
+                            if (!HelmetList.TryGetValue(((HelmetShape - 1) / 10) + AssassinOffSet, out file)) file = LibraryFile.None;
                             CEnvir.LibraryList.TryGetValue(file, out HelmetLibrary);
 
                             if (!WeaponList.TryGetValue(LibraryWeaponShape / 10, out file)) file = LibraryFile.None;
@@ -513,7 +534,7 @@ namespace Client.Models
                             CEnvir.LibraryList.TryGetValue(file, out BodyLibrary);
                             CEnvir.LibraryList.TryGetValue(LibraryFile.WM_HairA, out HairLibrary);
 
-                            if (!HelmetList.TryGetValue(HelmetShape / 10 + AssassinOffSet + FemaleOffSet, out file)) file = LibraryFile.None;
+                            if (!HelmetList.TryGetValue(((HelmetShape - 1) / 10) + AssassinOffSet + FemaleOffSet, out file)) file = LibraryFile.None;
                             CEnvir.LibraryList.TryGetValue(file, out HelmetLibrary);
 
                             if (!WeaponList.TryGetValue(LibraryWeaponShape / 10 + FemaleOffSet, out file)) file = LibraryFile.None;
@@ -553,24 +574,23 @@ namespace Client.Models
             switch (action.Action)
             {
                 case MirAction.Standing:
-                    //if(VisibleBuffs.Contains(BuffType.Stealth))
                     animation = MirAnimation.Standing;
 
                     if (CEnvir.Now < StanceTime)
                         animation = MirAnimation.Stance;
 
-                    if (VisibleBuffs.Contains(BuffType.Cloak))
+                    if (VisibleBuffs.ContainsKey(BuffType.Cloak))
                         animation = MirAnimation.CreepStanding;
 
                     if (Horse != HorseType.None)
                         animation = MirAnimation.HorseStanding;
 
-                    if (VisibleBuffs.Contains(BuffType.DragonRepulse))
+                    if (VisibleBuffs.ContainsKey(BuffType.DragonRepulse))
                         animation = MirAnimation.DragonRepulseMiddle;
                     else if (CurrentAnimation == MirAnimation.DragonRepulseMiddle)
                         animation = MirAnimation.DragonRepulseEnd;
 
-                    if (VisibleBuffs.Contains(BuffType.ElementalHurricane))
+                    if (VisibleBuffs.ContainsKey(BuffType.ElementalHurricane))
                         animation = MirAnimation.ChannellingMiddle;
 
                     break;
@@ -584,8 +604,8 @@ namespace Client.Models
 
                     if ((MagicType)action.Extra[1] == MagicType.ShoulderDash || (MagicType)action.Extra[1] == MagicType.Assault)
                         animation = MirAnimation.Combat8;
-                    else if (VisibleBuffs.Contains(BuffType.Cloak))
-                        animation = VisibleBuffs.Contains(BuffType.GhostWalk) ? MirAnimation.CreepWalkFast : MirAnimation.CreepWalkSlow;
+                    else if (VisibleBuffs.ContainsKey(BuffType.Cloak))
+                        animation = VisibleBuffs.ContainsKey(BuffType.GhostWalk) ? MirAnimation.CreepWalkFast : MirAnimation.CreepWalkSlow;
                     else if ((int)action.Extra[0] >= 2)
                     {
                         animation = MirAnimation.Running;
@@ -622,7 +642,7 @@ namespace Client.Models
                     if (type == MagicType.PoisonousCloud)
                         DrawWeapon = false;
 
-                    if (VisibleBuffs.Contains(BuffType.ElementalHurricane))
+                    if (VisibleBuffs.ContainsKey(BuffType.ElementalHurricane))
                         animation = MirAnimation.ChannellingEnd;
 
                     break;
@@ -812,7 +832,6 @@ namespace Client.Models
                     }
                     break;
             }
-
         }
 
         public override void DoNextAction()
@@ -910,6 +929,25 @@ namespace Client.Models
                             break;
                     }
                     break;
+                case MirAction.Attack:
+                    switch (MagicType)
+                    {
+                        case MagicType.OffensiveBlow:
+                            if (FrameIndex == 3)
+                            {
+                                Effects.Add(new MirEffect(2305, 5, TimeSpan.FromMilliseconds(100), LibraryFile.MagicEx5, 10, 50, Globals.FireColour)
+                                {
+                                    Blend = true,
+                                    Target = this,
+                                    Direction = Direction,
+                                    Skip = 10
+                                });
+
+                                DXSoundManager.Play(SoundIndex.OffensiveBlow);
+                            }
+                            break;
+                    }
+                    break;
             }
         }
 
@@ -942,7 +980,7 @@ namespace Client.Models
         {
             Surface oldSurface = DXManager.CurrentSurface;
             DXManager.SetSurface(DXManager.ScratchSurface);
-            DXManager.Device.Clear(ClearFlags.Target, 0, 0, 0);
+            DXManager.Device.Clear(ClearFlags.Target, Color.FromArgb(0, 0, 0, 0), 0f, 0);
             DXManager.Sprite.Flush();
 
             int l = int.MaxValue, t = int.MaxValue, r = int.MinValue, b = int.MinValue;

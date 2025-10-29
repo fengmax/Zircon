@@ -1,12 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using Client.Controls;
+﻿using Client.Controls;
 using Client.Envir;
 using Client.UserModels;
 using Library;
 using Library.SystemModels;
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
 
 //Cleaned
 namespace Client.Scenes.Views
@@ -31,7 +31,7 @@ namespace Client.Scenes.Views
             ScrollBar.HideWhenNoScroll = true;
 
             TextPanel.Location = new Point(0, ResizeBuffer);
-            TextPanel.Size = new Size(Size.Width - ScrollBar.Size.Width - 1 - ResizeBuffer , Size.Height - ResizeBuffer * 2);
+            TextPanel.Size = new Size(Size.Width - ScrollBar.Size.Width - 1 - ResizeBuffer, Size.Height - ResizeBuffer * 2);
 
             ScrollBar.VisibleSize = TextPanel.Size.Height;
             ScrollBar.Location = new Point(Size.Width - ScrollBar.Size.Width - ResizeBuffer, ResizeBuffer);
@@ -125,14 +125,14 @@ namespace Client.Scenes.Views
                     IsControl = false,
                     Location = new Point(15, Lines.Count * 15)
                 };
-                
+
 
                 DXAnimatedControl QuestIcon = new DXAnimatedControl
                 {
                     Parent = TextPanel,
                     Location = new Point(2, Lines.Count * 15),
                     Loop = true,
-                    LibraryFile = LibraryFile.Interface,
+                    LibraryFile = LibraryFile.QuestIcon,
                     BaseIndex = 83,
                     FrameCount = 2,
                     AnimationDelay = TimeSpan.FromSeconds(1),
@@ -148,7 +148,46 @@ namespace Client.Scenes.Views
                     QuestIcon.Location = new Point(QuestIcon.Location.X, label.Location.Y);
                 };
 
-                QuestIcon.BaseIndex = !userQuest.IsComplete ? 85 : 93;
+                var type = userQuest.Quest.QuestType;
+                var icon = userQuest.IsComplete ? Library.QuestIcon.Complete : Library.QuestIcon.Incomplete;
+                int startIndex = 0;
+
+                switch (type)
+                {
+                    case QuestType.General:
+                        startIndex = 16;
+                        break;
+                    case QuestType.Daily:
+                        startIndex = 76;
+                        break;
+                    case QuestType.Weekly:
+                        startIndex = 76;
+                        break;
+                    case QuestType.Repeatable:
+                        startIndex = 16;
+                        break;
+                    case QuestType.Story:
+                        startIndex = 56;
+                        break;
+                    case QuestType.Account:
+                        startIndex = 36;
+                        break;
+                }
+
+                switch (icon)
+                {
+                    case Library.QuestIcon.New:
+                        startIndex += 0;
+                        break;
+                    case Library.QuestIcon.Incomplete:
+                        startIndex = 2;
+                        break;
+                    case Library.QuestIcon.Complete:
+                        startIndex += 2;
+                        break;
+                }
+
+                QuestIcon.BaseIndex = startIndex;
 
 
                 if (userQuest.IsComplete)
@@ -196,13 +235,13 @@ namespace Client.Scenes.Views
                     }
                 }
             }
-            
+
 
             Visible = Lines.Count > 0;
             UpdateScrollBar();
         }
         #endregion
-        
+
         #region IDisposable
 
         protected override void Dispose(bool disposing)

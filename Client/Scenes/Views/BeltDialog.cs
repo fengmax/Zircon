@@ -1,10 +1,10 @@
-﻿using System;
-using System.Drawing;
-using System.Linq;
-using Client.Controls;
+﻿using Client.Controls;
 using Client.Envir;
 using Client.UserModels;
 using Library;
+using System;
+using System.Drawing;
+using System.Linq;
 
 //Cleaned
 namespace Client.Scenes.Views
@@ -16,20 +16,22 @@ namespace Client.Scenes.Views
         public ClientBeltLink[] Links;
 
         public DXItemGrid Grid;
-
         public override void OnClientAreaChanged(Rectangle oValue, Rectangle nValue)
         {
             base.OnClientAreaChanged(oValue, nValue);
 
-            if (Links == null) return;
+            if (Links == null || Grid == null) return;
 
             Grid?.Dispose();
+
+            int cols = Math.Max(1, (ClientArea.Width) / (DXItemCell.CellWidth - 1));
+            int rows = Math.Max(1, (ClientArea.Height) / (DXItemCell.CellHeight - 1));
 
             Grid = new DXItemGrid
             {
                 Parent = this,
                 Location = ClientArea.Location,
-                GridSize = new Size(Math.Max(1, (ClientArea.Size.Width) / (DXItemCell.CellWidth - 1)), Math.Max(1, ClientArea.Size.Height / (DXItemCell.CellHeight - 1))),
+                GridSize = new Size(cols, rows),
                 GridType = GridType.Belt,
                 AllowLink = false,
             };
@@ -65,7 +67,7 @@ namespace Client.Scenes.Views
             HasTopBorder = false;
             TitleLabel.Visible = false;
             CloseButton.Visible = false;
-            
+
             AllowResize = true;
 
             Links = new ClientBeltLink[Globals.MaxBeltCount];
@@ -86,12 +88,12 @@ namespace Client.Scenes.Views
             Grid.BringToFront();
             Grid.Visible = true;
 
+            OnClientAreaChanged(ClientArea, ClientArea);
         }
 
         #region Methods
         public void UpdateLinks()
         {
-
             foreach (ClientBeltLink link in Links)
             {
                 if (link.Slot < 0 || link.Slot >= Grid.Grid.Length) continue;
@@ -114,8 +116,8 @@ namespace Client.Scenes.Views
             else
                 y = 0;
 
-            x = Math.Max(1, Math.Min(Globals.MaxBeltCount, x))*(DXItemCell.CellWidth - 1) + 1;
-            y = Math.Max(1, Math.Min(Globals.MaxBeltCount, y))*(DXItemCell.CellHeight - 1) + 1;
+            x = Math.Max(1, Math.Min(Globals.MaxBeltCount, x)) * (DXItemCell.CellWidth - 1) + 1;
+            y = Math.Max(1, Math.Min(Globals.MaxBeltCount, y)) * (DXItemCell.CellHeight - 1) + 1;
 
             if (x >= y)
                 x += 10;
@@ -124,6 +126,7 @@ namespace Client.Scenes.Views
 
             return GetSize(new Size(x, y));
         }
+
         #endregion
 
         #region IDisposable

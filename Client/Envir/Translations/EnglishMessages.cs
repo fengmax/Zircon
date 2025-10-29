@@ -2,7 +2,7 @@
 
 namespace Client.Envir.Translations
 {
-    [ConfigPath(@".\Translations\EnglishMessages.ini")]
+    [ConfigPath(@".\Translations\EnglishMessages.ini", Disabled = false)]
     public class EnglishMessages : StringMessages
     {
         [ConfigSection("Message")]
@@ -33,6 +33,7 @@ namespace Client.Envir.Translations
         public override string WeaponEnergyDragonRise { get; set; } = "Energy builds up within your weapon, Dragon Rise is ready.";
         public override string WeaponEnergyBladeStorm { get; set; } = "Energy builds up within your weapon, Blade Storm is ready.";
         public override string WeaponEnergyDefensiveBlow { get; set; } = "Energy builds up within your weapon, Defensive Blow is ready.";
+        public override string WeaponEnergyOffensiveBlow { get; set; } = "Energy builds up within your weapon, Offensive Blow is ready.";
         public override string LevelIncreased { get; set; } = "Level Increased";
         public override string GainedExperience { get; set; } = "Experience Gained {0:#,##0.#}";
         public override string LostExperience { get; set; } = "Experience Lost {0:#,##0.#}.";
@@ -41,6 +42,7 @@ namespace Client.Envir.Translations
         public override string ItemGained { get; set; } = "You gained {0}.";
         public override string ItemsGained { get; set; } = "You gained {0} x{1}.";
         public override string NothingHappen { get; set; } = "Nothing happen to your {0}";
+        public override string NotEnoughCurrency { get; set; } = "Not enough {0}.";
         public override string ItemStatsNewElement { get; set; } = "Your {0} has been effected: New Element {1}";
         public override string ItemStatsEffected { get; set; } = "Your {0} has been effected: {1}";
         public override string ItemDurabilityDrop { get; set; } = "Your item {0} has dropped to durability 0";
@@ -95,12 +97,13 @@ namespace Client.Envir.Translations
         public override string BuySellNeedGold { get; set; } = "You do not have enough gold to buy a '{0}'.";
         public override string QuestSelectReward { get; set; } = "Please select a reward.";
         public override string CompanionNeedTicket { get; set; } = "You need a Companion Ticket to unlock a new appearance";
+        public override string CompanionNeedItem { get; set; } = "You need a {0} to unlock a new appearance";
         public override string RefineNeedIronOre { get; set; } = "You need Iron Ore x4 to create a Refinement Stone";
         public override string RefineNeedSilverOre { get; set; } = "You need Silver Ore x4 to create a Refinement Stone";
         public override string RefineNeedDiamond { get; set; } = "You need Diamond x4 to create a Refinement Stone";
         public override string RefineNeedGoldOre { get; set; } = "You need Gold Ore x2 to create a Refinement Stone";
         public override string RefineNeedCrystal { get; set; } = "You need Crystal x1 to create a Refinement Stone";
-        public override string RefineNeedGold { get; set; } = "You cannot aford to offer this amount of gold.";
+        public override string RefineNeedGold { get; set; } = "You cannot afford to offer this amount of gold.";
         public override string RefineNeedFragmentI { get; set; } = "You need Fragment (I) x10 to Master Refine";
         public override string RefineNeedFragmentII { get; set; } = "You need Fragment (II) x10 to Master Refine";
         public override string RefineNeedFragmentIII { get; set; } = "You need at least 1x Fragment (III) to Master Refine";
@@ -706,5 +709,25 @@ namespace Client.Envir.Translations
         public override string TradeDialogUserLabel { get; set; } = "User";
         public override string TradeDialogPlayerLabel { get; set; } = "Player";
         public override string TradeDialogGoldLabel { get; set; } = "Gold";
+
+        public override string LootBoxRerollMessage { get; set; } = "Rerolling a lootbox will cost {0} {1}. Are you sure?";
+        public override string LootBoxRerollTitle { get; set; } = "Reroll Confirmation";
+        public override string LootBoxItemChoiceMessage { get; set; } = "Are you sure you want to confirm your choice of items?";
+        public override string LootBoxItemChoiceTitle { get; set; } = "Confirm Choice Confirmation";
+        public override string LootBoxTakeItemsMessage { get; set; } = "Are you ready to take your items?";
+        public override string LootBoxTakeItemsTitle { get; set; } = "Take Items Confirmation";
+        public override string LootBoxShuffleMessage { get; set; } = "Items displayed above will be shuffled.\n\nConfirm the selection of items or reroll\nfor a new selection.";
+        public override string LootBoxOpenDescription { get; set; } = "Click a box to open it.\nNext opening cost is {0} {1}.";
+        public override string LootBoxOpenMessage { get; set; } = "Opening this box will cost {0} {1}. Are you sure?";
+        public override string LootBoxOpenTitle { get; set; } = "Open Confirmation";
+        public override string LootBoxRerollCountLabel { get; set; } = "Remaining Rerolls: {0}";
+        public override string LootBoxRerollButtonLabel { get; set; } = "Reroll ({0} {1})";
+        public override string LootBoxConfirmChoiceButtonLabel { get; set; } = "Confirm Choice";
+        public override string LootBoxTakeItemsButtonLabel { get; set; } = "Take Items";
+
+        public override string BundleTitle { get; set; } = "Bundle";
+        public override string BundleConfirmRandomButtonLabel { get; set; } = "Take Random";
+        public override string BundleConfirmAllButtonLabel { get; set; } = "Take All";
+        public override string BundleConfirmOneButtonLabel { get; set; } = "Take Item";
     }
 }

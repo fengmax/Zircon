@@ -531,7 +531,6 @@ namespace Server
 
         private void EventInfoButton_LinkClicked(object sender, DevExpress.XtraNavBar.NavBarLinkEventArgs e)
         {
-
             ShowView(typeof(EventInfoView));
         }
 
@@ -593,6 +592,16 @@ namespace Server
         private void FameInfoButton_LinkClicked(object sender, DevExpress.XtraNavBar.NavBarLinkEventArgs e)
         {
             ShowView(typeof(FameInfoView));
+        }
+
+        private void BundleInfoButton_LinkClicked(object sender, DevExpress.XtraNavBar.NavBarLinkEventArgs e)
+        {
+            ShowView(typeof(BundleInfoView));
+        }
+
+        private void LootBoxInfoButton_LinkClicked(object sender, DevExpress.XtraNavBar.NavBarLinkEventArgs e)
+        {
+            ShowView(typeof(LootBoxInfoView));
         }
     }
 }

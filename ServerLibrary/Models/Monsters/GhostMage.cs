@@ -1,6 +1,6 @@
-﻿using System;
-using Library;
+﻿using Library;
 using Server.Envir;
+using System;
 using S = Library.Network.ServerPackets;
 
 namespace Server.Models.Monsters
@@ -19,7 +19,7 @@ namespace Server.Models.Monsters
         {
             Visible = false;
         }
-        
+
         public override void Process()
         {
             base.Process();
@@ -29,7 +29,7 @@ namespace Server.Models.Monsters
             if (SEnvir.Now <= VisibleTime) return;
 
             VisibleTime = SEnvir.Now.AddSeconds(3);
-            
+
             bool visible = Target != null && Functions.InRange(Target.CurrentLocation, CurrentLocation, 5);
 
             if (!visible) return;
@@ -37,6 +37,18 @@ namespace Server.Models.Monsters
             Visible = true;
             CellTime = SEnvir.Now.AddMilliseconds(500);
             ActionTime = SEnvir.Now.AddSeconds(1);
+
+            SpellObject ob = new SpellObject
+            {
+                DisplayLocation = CurrentLocation,
+                Direction = Direction,
+                TickCount = 1,
+                TickFrequency = TimeSpan.FromMinutes(1),
+                Owner = this,
+                Effect = SpellEffect.ZombieHole
+            };
+
+            ob.Spawn(CurrentMap, CurrentLocation);
 
             AddAllObjects();
             Broadcast(new S.ObjectShow { ObjectID = ObjectID, Direction = Direction, Location = CurrentLocation });

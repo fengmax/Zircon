@@ -1,16 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Library;
+using SharpDX.Direct3D9;
+using System;
 using System.Drawing;
 using System.IO;
-using System.Linq;
-using System.Reflection.Metadata;
-using System.Text;
+using System.Numerics;
 using System.Threading;
-using System.Threading.Tasks;
-using Library;
-using Sentry;
-using SlimDX;
-using SlimDX.Direct3D9;
+using Client.Extensions;
+using Matrix = SharpDX.Matrix;
+using DataRectangle = SharpDX.DataRectangle;
 
 namespace Client.Envir
 {
@@ -146,7 +143,7 @@ namespace Client.Envir
             return image.VisiblePixel(location, accurate);
         }
 
-        public void Draw(int index, float x, float y, Color4 colour, Rectangle area, float opacity, ImageType type, byte shadow = 0)
+        public void Draw(int index, float x, float y, Color colour, Rectangle area, float opacity, ImageType type, byte shadow = 0)
         {
             if (!CheckImage(index)) return;
 
@@ -178,7 +175,7 @@ namespace Client.Envir
                                 Matrix m = Matrix.Scaling(1F, 0.5f, 0);
 
                                 m.M21 = -0.50F;
-                                DXManager.Sprite.Transform = m*Matrix.Translation(x + image.Height/2, y, 0);
+                                DXManager.Sprite.Transform = m * Matrix.Translation(x + image.Height / 2, y, 0);
 
                                 DXManager.Device.SetSamplerState(0, SamplerState.MinFilter, TextureFilter.None);
                                 if (oldOpacity != 0.5F) DXManager.SetOpacity(0.5F);
@@ -223,12 +220,12 @@ namespace Client.Envir
 
             image.ExpireTime = Time.Now + Config.CacheDuration;
         }
-        public void Draw(int index, float x, float y, Color4 colour, bool useOffSet, float opacity, ImageType type, float scale = 1F)
+        public void Draw(int index, float x, float y, Color colour, bool useOffSet, float opacity, ImageType type, float scale = 1F)
         {
             if (!CheckImage(index)) return;
 
             MirImage image = Images[index];
-            
+
             Texture texture;
 
             Matrix scaling, rotationZ, translation;
@@ -334,12 +331,73 @@ namespace Client.Envir
             DXManager.Sprite.Transform = Matrix.Identity;
 
             CEnvir.DPSCounter++;
-            
+
             DXManager.SetOpacity(oldOpacity);
 
             image.ExpireTime = Time.Now + Config.CacheDuration;
         }
-        public void DrawBlend(int index, float size, Color4 colour, float x, float y, float angle, float opacity, ImageType type, bool useOffSet = false, byte shadow = 0)
+
+        public void Draw(int index, float sizeX, float sizeY, Color colour, float x, float y, float angle, float opacity, ImageType type, bool useOffSet = false, byte shadow = 0)
+        {
+            if (!CheckImage(index)) return;
+
+            MirImage image = Images[index];
+
+            Texture texture;
+
+            switch (type)
+            {
+                case ImageType.Image:
+                    if (!image.ImageValid) image.CreateImage(_BReader);
+                    texture = image.Image;
+                    if (useOffSet)
+                    {
+                        x += image.OffSetX;
+                        y += image.OffSetY;
+                    }
+                    break;
+                case ImageType.Shadow:
+                    return;
+                /*     if (!image.ShadowValid) image.CreateShadow(_BReader);
+                     texture = image.Shadow;
+
+                     if (useOffSet)
+                     {
+                         x += image.ShadowOffSetX;
+                         y += image.ShadowOffSetY;
+                     }
+                     break;*/
+                case ImageType.Overlay:
+                    if (!image.OverlayValid) image.CreateOverlay(_BReader);
+                    texture = image.Overlay;
+
+                    if (useOffSet)
+                    {
+                        x += image.OffSetX;
+                        y += image.OffSetY;
+                    }
+                    break;
+                default:
+                    return;
+            }
+            if (texture == null) return;
+
+            var scaling = Matrix.Scaling(sizeX, sizeY, 0f);
+            var rotationZ = Matrix.RotationZ(angle);
+            var translation = Matrix.Translation(x + (image.Width / 2), y + (image.Height / 2), 0);
+
+            DXManager.Sprite.Transform = scaling * rotationZ * translation;
+
+            DXManager.Sprite.Draw(texture, Vector3.Zero, new Vector3((image.Width / 2) * -1, (image.Height / 2) * -1, 0), colour);
+
+            DXManager.Sprite.Transform = Matrix.Identity;
+
+            CEnvir.DPSCounter++;
+
+            image.ExpireTime = Time.Now + Config.CacheDuration;
+        }
+
+        public void DrawBlend(int index, float sizeX, float sizeY, Color colour, float x, float y, float angle, float opacity, ImageType type, bool useOffSet = false, byte shadow = 0)
         {
             if (!CheckImage(index)) return;
 
@@ -390,7 +448,7 @@ namespace Client.Envir
 
             DXManager.SetBlend(true, opacity);
 
-            var scaling = Matrix.Scaling(size, size, 0f);
+            var scaling = Matrix.Scaling(sizeX, sizeY, 0f);
             var rotationZ = Matrix.RotationZ(angle);
             var translation = Matrix.Translation(x + (image.Width / 2), y + (image.Height / 2), 0);
 
@@ -406,7 +464,7 @@ namespace Client.Envir
 
             image.ExpireTime = Time.Now + Config.CacheDuration;
         }
-        public void DrawBlend(int index, float x, float y, Color4 colour, bool useOffSet, float rate, ImageType type, byte shadow = 0)
+        public void DrawBlend(int index, float x, float y, Color colour, bool useOffSet, float rate, ImageType type, byte shadow = 0)
         {
             if (!CheckImage(index)) return;
 
@@ -427,15 +485,15 @@ namespace Client.Envir
                     break;
                 case ImageType.Shadow:
                     return;
-               /*     if (!image.ShadowValid) image.CreateShadow(_BReader);
-                    texture = image.Shadow;
+                /*     if (!image.ShadowValid) image.CreateShadow(_BReader);
+                     texture = image.Shadow;
 
-                    if (useOffSet)
-                    {
-                        x += image.ShadowOffSetX;
-                        y += image.ShadowOffSetY;
-                    }
-                    break;*/
+                     if (useOffSet)
+                     {
+                         x += image.ShadowOffSetX;
+                         y += image.ShadowOffSetY;
+                     }
+                     break;*/
                 case ImageType.Overlay:
                     if (!image.OverlayValid) image.CreateOverlay(_BReader);
                     texture = image.Overlay;
@@ -464,7 +522,7 @@ namespace Client.Envir
 
             image.ExpireTime = Time.Now + Config.CacheDuration;
         }
-        
+
 
         #region IDisposable Support
 
@@ -632,14 +690,12 @@ namespace Client.Envir
 
             OverlayWidth = reader.ReadInt16();
             OverlayHeight = reader.ReadInt16();
-
-
         }
 
         public unsafe bool VisiblePixel(Point p, bool acurrate)
         {
             if (p.X < 0 || p.Y < 0 || !ImageValid || ImageData == null) return false;
-            
+
             int w = Width + (4 - Width % 4) % 4;
             int h = Height + (4 - Height % 4) % 4;
 
@@ -659,19 +715,19 @@ namespace Client.Envir
             x = p.X % 4;
             y = p.Y % 4;
             x *= 2;
-            
+
             return (ImageData[index + 4 + y] & 1 << x) >> x != 1 || (ImageData[index + 4 + y] & 1 << x + 1) >> x + 1 != 1;
         }
 
         public unsafe void DisposeTexture()
         {
-            if (Image != null && !Image.Disposed)
+            if (Image != null && !Image.IsDisposed)
                 Image.Dispose();
 
-            if (Shadow != null && !Shadow.Disposed)
+            if (Shadow != null && !Shadow.IsDisposed)
                 Shadow.Dispose();
 
-            if (Overlay != null && !Overlay.Disposed)
+            if (Overlay != null && !Overlay.IsDisposed)
                 Overlay.Dispose();
 
             ImageData = null;
@@ -685,7 +741,7 @@ namespace Client.Envir
             ImageValid = false;
             ShadowValid = false;
             OverlayValid = false;
-            
+
             ExpireTime = DateTime.MinValue;
 
             DXManager.TextureList.Remove(this);
@@ -702,16 +758,16 @@ namespace Client.Envir
 
             Image = new Texture(DXManager.Device, w, h, 1, Usage.None, DrawFormat, Pool.Managed);
             DataRectangle rect = Image.LockRectangle(0, LockFlags.Discard);
-            ImageData = (byte*)rect.Data.DataPointer;
+            ImageData = (byte*)rect.DataPointer;
 
             lock (reader)
             {
                 reader.BaseStream.Seek(Position, SeekOrigin.Begin);
-                rect.Data.Write(reader.ReadBytes(ImageDataSize), 0, ImageDataSize);
+                byte[] buffer = reader.ReadBytes(ImageDataSize);
+                SharpDX.Utilities.Write(rect.DataPointer, buffer, 0, buffer.Length);
             }
 
             Image.UnlockRectangle(0);
-            rect.Data.Dispose();
 
             ImageValid = true;
             ExpireTime = CEnvir.Now + Config.CacheDuration;
@@ -731,16 +787,16 @@ namespace Client.Envir
 
             Shadow = new Texture(DXManager.Device, w, h, 1, Usage.None, DrawFormat, Pool.Managed);
             DataRectangle rect = Shadow.LockRectangle(0, LockFlags.Discard);
-            ShadowData = (byte*)rect.Data.DataPointer;
+            ShadowData = (byte*)rect.DataPointer;
 
             lock (reader)
             {
                 reader.BaseStream.Seek(Position + ImageDataSize, SeekOrigin.Begin);
-                rect.Data.Write(reader.ReadBytes(ShadowDataSize), 0, ShadowDataSize);
+                byte[] buffer = reader.ReadBytes(ShadowDataSize);
+                SharpDX.Utilities.Write(rect.DataPointer, buffer, 0, buffer.Length);
             }
 
             Shadow.UnlockRectangle(0);
-            rect.Data.Dispose();
 
             ShadowValid = true;
         }
@@ -758,16 +814,16 @@ namespace Client.Envir
 
             Overlay = new Texture(DXManager.Device, w, h, 1, Usage.None, DrawFormat, Pool.Managed);
             DataRectangle rect = Overlay.LockRectangle(0, LockFlags.Discard);
-            OverlayData = (byte*)rect.Data.DataPointer;
+            OverlayData = (byte*)rect.DataPointer;
 
             lock (reader)
             {
                 reader.BaseStream.Seek(Position + ImageDataSize + ShadowDataSize, SeekOrigin.Begin);
-                rect.Data.Write(reader.ReadBytes(OverlayDataSize), 0, OverlayDataSize);
+                byte[] buffer = reader.ReadBytes(OverlayDataSize);
+                SharpDX.Utilities.Write(rect.DataPointer, buffer, 0, buffer.Length);
             }
 
             Overlay.UnlockRectangle(0);
-            rect.Data.Dispose();
 
             OverlayValid = true;
         }

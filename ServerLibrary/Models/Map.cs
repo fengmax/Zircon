@@ -95,13 +95,21 @@ namespace Server.Models
             CreateCastleGates();
             CreateCastleGuards();
 
-            LastPlayer = DateTime.UtcNow;
+            CreateCellRegions();
+
+            LastPlayer = SEnvir.Now;
         }
 
         private void CreateGuards()
         {
             foreach (GuardInfo info in Info.Guards)
             {
+                if (info.Monster == null)
+                {
+                    SEnvir.Log($"Failed to spawn Unset Guard Map:{Info.Description}, Location: {info.X}, {info.Y}");
+                    continue;
+                }
+
                 MonsterObject mob = MonsterObject.GetMonster(info.Monster);
                 mob.Direction = info.Direction;
 
@@ -174,6 +182,32 @@ namespace Server.Models
             }
         }
 
+        public void CreateCellRegions()
+        {
+            foreach (MapRegion region in Info.Regions)
+            {
+                if (region.RegionType != RegionType.Area) continue;
+
+                var points = region.GetPoints(Width);
+
+                foreach (Point sPoint in points)
+                {
+                    Cell source = GetCell(sPoint);
+
+                    if (source == null)
+                    {
+                        SEnvir.Log($"[Cell] Bad Point, Source: {Info.FileName} {region.Description}, X:{sPoint.X}, Y:{sPoint.Y}");
+                        continue;
+                    }
+
+                    if (source.Regions == null)
+                        source.Regions = new List<MapRegion>();
+
+                    source.Regions.Add(region);
+                }
+            }
+        }
+
         public void RefreshFlags()
         {
             foreach (var ob in CastleFlags)
@@ -184,9 +218,9 @@ namespace Server.Models
 
         public void Process()
         {
-            if (LastPlayer.AddMinutes(1) < DateTime.UtcNow && Players.Any())
+            if (LastPlayer.AddMinutes(1) < SEnvir.Now && Players.Any())
             {
-                LastPlayer = DateTime.UtcNow;
+                LastPlayer = SEnvir.Now;
             }
         }
 
@@ -247,28 +281,36 @@ namespace Server.Models
         {
             return GetCell(location.X, location.Y);
         }
-        public List<Cell> GetCells(Point location, int minRadius, int maxRadius, bool randomOrder = false)
+
+        public List<Cell> GetCells(Point location, int minRadius, int maxRadius, bool randomOrder = false, bool circle = false)
         {
             List<Cell> cells = new List<Cell>();
 
-            for (int d = 0; d <= maxRadius; d++)
+            // Iterate over a square bounding box that covers the circle
+            for (int y = location.Y - maxRadius; y <= location.Y + maxRadius; y++)
             {
-                for (int y = location.Y - d; y <= location.Y + d; y++)
+                if (y < 0 || y >= Height) continue;
+
+                for (int x = location.X - maxRadius; x <= location.X + maxRadius; x++)
                 {
-                    if (y < 0) continue;
-                    if (y >= Height) break;
+                    if (x < 0 || x >= Width) continue;
 
-                    for (int x = location.X - d; x <= location.X + d; x += Math.Abs(y - location.Y) == d ? 1 : d * 2)
-                    {
-                        if (x < 0) continue;
-                        if (x >= Width) break;
+                    // Compute Manhattan/Euclidean distance depending on circle flag
+                    int dx = x - location.X;
+                    int dy = y - location.Y;
 
-                        Cell cell = Cells[x, y]; //Direct Access we've checked the boudaries.
+                    double distance = circle
+                        ? Math.Sqrt(dx * dx + dy * dy)   // Euclidean distance for circle
+                        : Math.Max(Math.Abs(dx), Math.Abs(dy)); // Chebyshev distance for square/diamond
 
-                        if (cell == null) continue;
+                    // Only keep cells inside the desired radius range
+                    if (distance < minRadius || distance > maxRadius)
+                        continue;
 
-                        cells.Add(cell);
-                    }
+                    Cell cell = Cells[x, y];
+                    if (cell == null) continue;
+
+                    cells.Add(cell);
                 }
             }
 
@@ -435,6 +477,8 @@ namespace Server.Models
 
         public List<MovementInfo> Movements;
 
+        public List<MapRegion> Regions = [];
+
         public List<QuestTask> QuestTasks;
 
         public Cell(Point location)
@@ -486,6 +530,7 @@ namespace Server.Models
 
         public Cell GetMovement(MapObject ob)
         {
+            //TODO - This is probably not efficient for large regions. Find a better way to check when object has joined or left a region
             if (QuestTasks != null && QuestTasks.Count > 0)
             {
                 if (ob.Race == ObjectType.Player)
@@ -535,7 +580,7 @@ namespace Server.Models
                     }
                     else //Moving to instance
                     {
-                        var (index, result) = ((PlayerObject)ob).GetInstance(movement.NeedInstance);
+                        var (index, result) = ((PlayerObject)ob).GetInstance(movement.NeedInstance, walkOn: true);
 
                         if (result != InstanceResult.Success)
                         {
@@ -609,9 +654,16 @@ namespace Server.Models
                         if (spawn.AliveCount == 0)
                         {
                             player.Connection.ReceiveChatWithObservers(con => con.Language.NeedMonster, MessageType.System);
-
                             break;
                         }
+                    }
+
+                    if (movement.NeedHole)
+                    {
+                        var holes = Objects?.OfType<SpellObject>().Any(m => m.Effect == SpellEffect.ZombieHole && m.CurrentLocation == Location) ?? false;
+
+                        if (!holes)
+                            break;
                     }
 
                     if (movement.NeedItem != null)

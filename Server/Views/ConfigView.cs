@@ -1,11 +1,11 @@
-﻿using System;
-using System.ComponentModel;
-using System.Windows.Forms;
-using DevExpress.XtraBars;
+﻿using DevExpress.XtraBars;
 using Library;
 using Library.SystemModels;
 using Server.Envir;
-using Server.Models;
+using System;
+using System.ComponentModel;
+using System.IO;
+using System.Windows.Forms;
 using S = Library.Network.ServerPackets;
 
 namespace Server.Views
@@ -15,7 +15,8 @@ namespace Server.Views
         public ConfigView()
         {
             InitializeComponent();
-            this.SyncronizeButton.Click += SyncronizeButton_Click;
+            this.SyncronizeRemoteButton.Click += SyncronizeRemoteButton_Click;
+            this.SyncronizeLocalButton.Click += SyncronizeLocalButton_Click;
             this.DatabaseEncryptionButton.Click += DatabaseEncryptionButton_Click;
             MysteryShipRegionIndexEdit.Properties.DataSource = SMain.Session.GetCollection<MapRegion>().Binding;
             LairRegionIndexEdit.Properties.DataSource = SMain.Session.GetCollection<MapRegion>().Binding;
@@ -27,10 +28,21 @@ namespace Server.Views
             form.ShowDialog();
         }
 
-        private void SyncronizeButton_Click(object sender, EventArgs e)
+        private void SyncronizeRemoteButton_Click(object sender, EventArgs e)
         {
             var form = new SyncForm();
             form.ShowDialog();
+        }
+
+        private void SyncronizeLocalButton_Click(object sender, EventArgs e)
+        {
+            SEnvir.Log($"Starting local syncronization...");
+
+            SMain.Session.Save(true);
+
+            File.Copy(SMain.Session.SystemPath, Path.Combine(Config.ClientPath, "Data\\", Path.GetFileName(SMain.Session.SystemPath)), true);
+
+            SEnvir.Log($"Syncronization completed...");
         }
 
         protected override void OnLoad(EventArgs e)
@@ -133,6 +145,11 @@ namespace Server.Views
             EnableStruckEdit.EditValue = Config.EnableStruck;
             EnableHermitEdit.EditValue = Config.EnableHermit;
             EnableFortuneEdit.EditValue = Config.EnableFortune;
+            AdminGamemasterStartEdit.EditValue = Config.AdminStartInGamemasterMode;
+            AdminObserverStartEdit.EditValue = Config.AdminStartInObserverMode;
+            AdminSupermanStartEdit.EditValue = Config.AdminStartInSupermanMode;
+
+
 
             //Monsters
             DeadDurationEdit.EditValue = Config.DeadDuration;
@@ -247,6 +264,9 @@ namespace Server.Views
             Config.EnableStruck = (bool)EnableStruckEdit.EditValue;
             Config.EnableHermit = (bool)EnableHermitEdit.EditValue;
             Config.EnableFortune = (bool)EnableFortuneEdit.EditValue;
+            Config.AdminStartInGamemasterMode = (bool)AdminGamemasterStartEdit.EditValue;
+            Config.AdminStartInObserverMode = (bool)AdminObserverStartEdit.EditValue;
+            Config.AdminStartInSupermanMode = (bool)AdminSupermanStartEdit.EditValue;
 
             //Monsters
             Config.DeadDuration = (TimeSpan)DeadDurationEdit.EditValue;

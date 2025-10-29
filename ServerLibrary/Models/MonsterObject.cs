@@ -118,7 +118,6 @@ namespace Server.Models
         public override bool CanMove => base.CanMove && (Poison & PoisonType.Silenced) != PoisonType.Silenced && MoveDelay > 0 && (PetOwner == null || PetOwner.PetMode == PetMode.Both || PetOwner.PetMode == PetMode.Move || PetOwner.PetMode == PetMode.PvP);
         public override bool CanAttack => base.CanAttack && (Poison & PoisonType.Silenced) != PoisonType.Silenced && AttackDelay > 0 && (PetOwner == null || PetOwner.PetMode == PetMode.Both || PetOwner.PetMode == PetMode.Attack || PetOwner.PetMode == PetMode.PvP);
 
-
         public static MonsterObject GetMonster(MonsterInfo monsterInfo)
         {
             switch (monsterInfo.AI)
@@ -985,9 +984,9 @@ namespace Server.Models
             ProcessRoam();
             ProcessTarget();
         }
-        public override void OnSafeDespawn()
+        public override void OnDespawned()
         {
-            base.OnSafeDespawn();
+            base.OnDespawned();
 
             Master?.MinionList.Remove(this);
             Master = null;
@@ -1003,17 +1002,10 @@ namespace Server.Models
                 MinionList.Clear();
             }
 
-
-            if (SpawnInfo != null)
-                SpawnInfo.AliveCount--;
-
-            ProcessEvents();
-
             SpawnInfo = null;
 
             EXPOwner = null;
         }
-
 
         public void UnTame()
         {
@@ -1037,6 +1029,8 @@ namespace Server.Models
                 cell = PetOwner.CurrentCell;
 
             Teleport(PetOwner.CurrentMap, cell.Location);
+
+            Target = null;
         }
         public virtual void ProcessRegen()
         {
@@ -2327,16 +2321,18 @@ namespace Server.Models
                 ActionTime += TimeSpan.FromMilliseconds(poison.Value * 100);
             }
 
+            poison = PoisonList.FirstOrDefault(x => x.Type == PoisonType.Chain);
+
+            if (poison?.Extra2 is bool canSlow && canSlow)
+            {
+                AttackTime += TimeSpan.FromMilliseconds(100);
+                ActionTime += TimeSpan.FromMilliseconds(100);
+            }
+
             if ((Poison & PoisonType.Neutralize) == PoisonType.Neutralize)
             {
                 AttackTime += TimeSpan.FromMilliseconds(AttackDelay);
                 ActionTime += TimeSpan.FromMilliseconds(Math.Min(MoveDelay, AttackDelay - 100));
-            }
-
-            if ((Poison & PoisonType.Chain) == PoisonType.Chain)
-            {
-                AttackTime += TimeSpan.FromMilliseconds(100);
-                ActionTime += TimeSpan.FromMilliseconds(100);
             }
         }
 
@@ -2479,86 +2475,21 @@ namespace Server.Models
             if (Drops != null)
                 DeadTime += Config.HarvestDuration;
 
+            SEnvir.EventHandler.Process(this, "MONSTERDIE");
+
             if (SpawnInfo != null)
+            {
                 SpawnInfo.AliveCount--;
 
-            ProcessEvents();
+                if (SpawnInfo.AliveCount == 0)
+                {
+                    SEnvir.EventHandler.Process(this, "MONSTERCLEAR");
+                }
+            }
 
             SpawnInfo = null;
 
             EXPOwner = null;
-        }
-
-        private void ProcessEvents()
-        {
-            if (SpawnInfo == null) return;
-
-            foreach (EventTarget target in MonsterInfo.Events)
-            {
-                if ((DropSet & target.DropSet) != target.DropSet) continue;
-
-                int start = target.Event.CurrentValue;
-                int end = Math.Min(target.Event.MaxValue, Math.Max(0, start + target.Value));
-
-                target.Event.CurrentValue = end;
-
-                foreach (EventAction action in target.Event.Actions)
-                {
-                    if (start >= action.TriggerValue || end < action.TriggerValue) continue;
-
-                    Map map;
-                    switch (action.Type)
-                    {
-                        case EventActionType.GlobalMessage:
-                            SEnvir.Broadcast(new S.Chat { Text = action.StringParameter1, Type = MessageType.System });
-                            break;
-                        case EventActionType.MapMessage:
-                            map = SEnvir.GetMap(action.MapParameter1, CurrentMap.Instance, CurrentMap.InstanceSequence);
-                            if (map == null) continue;
-
-                            map.Broadcast(new S.Chat { Text = action.StringParameter1, Type = MessageType.System });
-                            break;
-                        case EventActionType.PlayerMessage:
-                            if (EXPOwner == null) continue;
-
-                            EXPOwner.Broadcast(new S.Chat { Text = action.StringParameter1, Type = MessageType.System });
-                            break;
-                        case EventActionType.MonsterSpawn:
-                            SpawnInfo spawn = SEnvir.Spawns.FirstOrDefault(x => x.Info == action.RespawnParameter1);
-                            if (spawn == null) continue;
-
-                            spawn.DoSpawn(true);
-                            break;
-                        case EventActionType.MonsterPlayerSpawn:
-
-                            MonsterObject mob = GetMonster(action.MonsterParameter1);
-                            mob.Spawn(CurrentMap, CurrentMap.GetRandomLocation(CurrentLocation, 10));
-                            break;
-                        case EventActionType.MovementSettings:
-                            break;
-                        case EventActionType.PlayerRecall:
-                            map = SEnvir.GetMap(action.MapParameter1, CurrentMap.Instance, CurrentMap.InstanceSequence);
-                            if (map == null) continue;
-
-                            for (int i = map.Players.Count - 1; i >= 0; i--)
-                            {
-                                PlayerObject player = map.Players[i];
-                                player.Teleport(action.RegionParameter1, CurrentMap.Instance, CurrentMap.InstanceSequence);
-                            }
-                            break;
-                        case EventActionType.PlayerEscape:
-                            map = SEnvir.GetMap(action.MapParameter1, CurrentMap.Instance, CurrentMap.InstanceSequence);
-                            if (map == null) continue;
-
-                            for (int i = map.Players.Count - 1; i >= 0; i--)
-                            {
-                                PlayerObject player = map.Players[i];
-                                player.Teleport(player.Character.BindPoint.BindRegion, CurrentMap.Instance, CurrentMap.InstanceSequence);
-                            }
-                            break;
-                    }
-                }
-            }
         }
 
         protected void YieldReward()
@@ -2713,6 +2644,8 @@ namespace Server.Models
 
             bool result = false;
 
+            bool companionAutoCollect = owner.Stats[Stat.CompanionCollection] > 0 && owner.Companion != null;
+
             List<UserItem> drops = null;
             foreach (DropInfo drop in MonsterInfo.Drops)
             {
@@ -2822,7 +2755,7 @@ namespace Server.Models
 
                     ob.Spawn(CurrentMap, cell.Location);
 
-                    if (owner.Stats[Stat.CompanionCollection] > 0 && owner.Companion != null)
+                    if (companionAutoCollect)
                     {
                         ItemCheck check = new ItemCheck(ob.Item, ob.Item.Count, ob.Item.Flags,
                             ob.Item.ExpireTime);
@@ -2845,7 +2778,11 @@ namespace Server.Models
                 while (amount > 0)
                 {
                     UserItem item = SEnvir.CreateDropItem(drop.Item);
-                    item.Count = Math.Min(drop.Item.StackSize, amount);
+                    if (companionAutoCollect && drop.Item == SEnvir.GoldInfo)
+                        item.Count = amount;
+                    else
+                        item.Count = Math.Min(drop.Item.StackSize, amount);
+
                     amount -= item.Count;
 
                     item.IsTemporary = true; //REMOVE ON Gain
@@ -2891,7 +2828,7 @@ namespace Server.Models
 
                     ob.Spawn(CurrentMap, cell.Location);
 
-                    if (owner.Stats[Stat.CompanionCollection] > 0 && owner.Companion != null)
+                    if (companionAutoCollect)
                     {
                         long goldAmount = 0;
 
@@ -2998,7 +2935,7 @@ namespace Server.Models
 
                             userTask.Objects.Add(ob);
 
-                            if (owner.Stats[Stat.CompanionCollection] > 0 && owner.Companion != null)
+                            if (companionAutoCollect)
                             {
                                 long goldAmount = 0;
 
@@ -3126,7 +3063,7 @@ namespace Server.Models
             }
         }
 
-        public override BuffInfo BuffAdd(BuffType type, TimeSpan remainingTicks, Stats stats, bool visible, bool pause, TimeSpan tickRate)
+        public override BuffInfo BuffAdd(BuffType type, TimeSpan remainingTicks, Stats stats, bool visible, bool pause, TimeSpan tickRate, bool hidden = false, int extra = 0)
         {
             BuffInfo info = base.BuffAdd(type, remainingTicks, stats, visible, pause, tickRate);
 
@@ -3178,7 +3115,7 @@ namespace Server.Models
                 HalloweenEvent = HalloweenEventMob,
                 ChristmasEvent = ChristmasEventMob,
 
-                Buffs = Buffs.Where(x => x.Visible).Select(x => x.Type).ToList()
+                Buffs = Buffs.Where(x => x.Visible).Select(x => new KeyValuePair<BuffType, int>(x.Type, x.Extra)).ToDictionary()
             };
         }
         public override Packet GetDataPacket(PlayerObject ob)

@@ -1,10 +1,11 @@
-﻿using System;
+﻿using Client.Envir;
+using Client.Extensions;
+using Library;
+using Texture = SharpDX.Direct3D9.Texture;
+using System;
 using System.Drawing;
 using System.Windows.Forms;
-using Client.Envir;
-using Library;
-using SlimDX;
-using SlimDX.Direct3D9;
+using SharpDX.Direct3D9;
 
 namespace Client.Controls
 {
@@ -231,7 +232,7 @@ namespace Client.Controls
             ForeColour = Color.White;
             Sound = SoundIndex.ButtonA;
             CanBePressed = true;
-            ForeColour = new Color4(0.85F, 0.85F, 0.85F).ToColor();
+            ForeColour = Color.FromArgb(217, 217, 217);
 
             Label = new DXLabel
             {
@@ -244,7 +245,7 @@ namespace Client.Controls
         }
 
         #region Methods
-        
+
         protected internal override void UpdateDisplayArea()
         {
             Rectangle area = new Rectangle(Location, Size);
@@ -263,10 +264,10 @@ namespace Client.Controls
             if (Library == null)
             {
                 DXManager.SetOpacity(Opacity);
-                
+
                 Surface oldSurface = DXManager.CurrentSurface;
                 DXManager.SetSurface(DXManager.ScratchSurface);
-                DXManager.Device.Clear(ClearFlags.Target, 0, 0, 0);
+                DXManager.Device.Clear(ClearFlags.Target, Color.FromArgb(0, 0, 0, 0), 0f, 0);
 
                 switch (ButtonType)
                 {
@@ -323,7 +324,7 @@ namespace Client.Controls
                 DXManager.SetOpacity(Opacity);
 
             PresentTexture(texture, Parent, DisplayArea, ForeColour, this, 0, Pressed ? 1 : 0);
-            
+
             if (Blend)
                 DXManager.SetBlend(oldBlend, oldRate, BlendMode);
             else
@@ -362,9 +363,9 @@ namespace Client.Controls
         public void UpdateForeColour()
         {
             if (!IsEnabled)
-                ForeColour = new Color4(0.2F, 0.2F, 0.2F).ToColor();
+                ForeColour = Color.FromArgb(51, 51, 51);
             else
-                ForeColour = MouseControl == this || Pressed ? new Color4(1F, 1F, 1F).ToColor() : new Color4(0.85F, 0.85F, 0.85F).ToColor();
+                ForeColour = MouseControl == this || Pressed ? Color.White : Color.FromArgb(217, 217, 217);
         }
 
         private void DrawDefault()

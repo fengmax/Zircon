@@ -1,14 +1,7 @@
 ﻿using Client.Envir;
-using Client.Scenes;
-using Library;
-using Newtonsoft.Json.Linq;
-using SlimDX;
 using System;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Numerics;
 
 namespace Client.Models.Particles
 {
@@ -190,7 +183,7 @@ namespace Client.Models.Particles
                         {
                             Remove = true;
                         }
-                    } 
+                    }
                     else
                     {
                         Remove = true;
@@ -220,7 +213,7 @@ namespace Client.Models.Particles
                 drawY -= (UseMovingOffset ? MapObject.User.MovingOffSet.Y : 0) + ((MapObject.User.CurrentLocation.Y - UserLocationOnCreation.Y) * MapObject.CellHeight);
             }
 
-            Library.DrawBlend(TextureIndex, Scale, Color, drawX, drawY, Angle, Opacity, ImageType.Image, false, 0);
+            Library.DrawBlend(TextureIndex, Scale, Scale, Color, drawX, drawY, Angle, Opacity, ImageType.Image, false, 0);
         }
 
         #region IDisposable

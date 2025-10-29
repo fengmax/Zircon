@@ -26,10 +26,11 @@ namespace Server.Models
         public virtual string Name { get; set; }
 
         public virtual string Caption { get; set; }
-       
-    
+
+
         public virtual int Level { get; set; }
 
+        public Cell PreviousCell { get; private set; }
         public Cell CurrentCell
         {
             get { return _CurrentCell; }
@@ -37,14 +38,15 @@ namespace Server.Models
             {
                 if (_CurrentCell == value) return;
 
-                var oldValue = _CurrentCell;
+                PreviousCell = _CurrentCell;
                 _CurrentCell = value;
 
-                LocationChanged(oldValue, value);
+                LocationChanged(PreviousCell, value);
             }
         }
         private Cell _CurrentCell;
 
+        public Map PreviousMap { get; private set; }
         public Map CurrentMap
         {
             get { return _CurrentMap; }
@@ -52,10 +54,10 @@ namespace Server.Models
             {
                 if (_CurrentMap == value) return;
 
-                var oldValue = _CurrentMap;
+                PreviousMap = _CurrentMap;
                 _CurrentMap = value;
 
-                MapChanged(oldValue, value);
+                MapChanged(PreviousMap, value);
             }
         }
         private Map _CurrentMap;
@@ -81,7 +83,7 @@ namespace Server.Models
         public DateTime ActionTime, MoveTime, RegenTime, AttackTime, MagicTime, CellTime, StruckTime, BuffTime, ShockTime, DisplayHPMPTime, ItemReviveTime;
         public List<DelayedAction> ActionList;
 
-        public virtual bool CanMove => !Dead && SEnvir.Now >= ActionTime && SEnvir.Now >= MoveTime && SEnvir.Now > ShockTime && (Poison & PoisonType.Paralysis) != PoisonType.Paralysis && (Poison & PoisonType.WraithGrip) != PoisonType.WraithGrip && (Poison & PoisonType.Containment) != PoisonType.Containment && Buffs.All(x => x.Type != BuffType.DragonRepulse);
+        public virtual bool CanMove => !Dead && SEnvir.Now >= ActionTime && SEnvir.Now >= MoveTime && SEnvir.Now > ShockTime && (Poison & PoisonType.Paralysis) != PoisonType.Paralysis && (Poison & PoisonType.WraithGrip) != PoisonType.WraithGrip && (Poison & PoisonType.Containment) != PoisonType.Containment && (Poison & PoisonType.Binding) != PoisonType.Binding && Buffs.All(x => x.Type != BuffType.DragonRepulse);
         public virtual bool CanAttack => !Dead && SEnvir.Now >= ActionTime && SEnvir.Now >= AttackTime && (Poison & PoisonType.Paralysis) != PoisonType.Paralysis && (Poison & PoisonType.Fear) != PoisonType.Fear && Buffs.All(x => x.Type != BuffType.DragonRepulse);
         public virtual bool CanCast => !Dead && SEnvir.Now >= ActionTime && SEnvir.Now >= MagicTime && (Poison & PoisonType.Paralysis) != PoisonType.Paralysis && (Poison & PoisonType.Fear) != PoisonType.Fear && (Poison & PoisonType.Silenced) != PoisonType.Silenced && Buffs.All(x => x.Type != BuffType.DragonRepulse);
 
@@ -220,7 +222,7 @@ namespace Server.Models
 
                 if (SEnvir.Now < poison.TickTime) continue;
 
-                if (poison.TickCount-- <= 0) 
+                if (poison.TickCount-- <= 0)
                     PoisonList.RemoveAt(i);
 
                 poison.TickTime = SEnvir.Now + poison.TickFrequency;
@@ -267,12 +269,15 @@ namespace Server.Models
                         damage += poison.Value;
                         break;
                     case PoisonType.Containment:
-                        damage += poison.Value; 
+                        damage += poison.Value;
                         break;
                     case PoisonType.Chain:
                         damage += Chain.PoisonTick(this);
                         break;
                     case PoisonType.Hemorrhage:
+                        damage += poison.Value;
+                        break;
+                    case PoisonType.Binding:
                         damage += poison.Value;
                         break;
                 }
@@ -289,7 +294,7 @@ namespace Server.Models
                         if (!poison.CanKill)
                             damage = Math.Min(CurrentHP - 1, damage);
                     }
-                        
+
                     if (damage > 0)
                     {
                         #region Conquest Stats
@@ -367,7 +372,7 @@ namespace Server.Models
                     if (Dead) break;
 
                     RegenTime = SEnvir.Now + RegenDelay;
-                    ShockTime = DateTime.MinValue;
+                    ShockTime = SEnvir.Now;
                 }
 
                 if (explode)
@@ -430,7 +435,9 @@ namespace Server.Models
                         player = (PlayerObject)this;
 
                         if (!player.InSafeZone || player.Companion.UserCompanion.Level < 15)
+                        {
                             player.Companion.UserCompanion.Hunger--;
+                        }
 
                         if (player.Companion.LevelInfo.MaxExperience > 0)
                         {
@@ -806,8 +813,6 @@ namespace Server.Models
             return Spawn(map, location);
         }
 
-
-
         public bool Spawn(Map map, Point location)
         {
             if (Node != null)
@@ -867,6 +872,7 @@ namespace Server.Models
 
             OnLocationChanged();
         }
+
         protected virtual void OnLocationChanged()
         {
             CellTime = SEnvir.Now.AddMilliseconds(300);
@@ -883,6 +889,7 @@ namespace Server.Models
                     player.Enqueue(p);
             }
         }
+
         public virtual void CheckSpellObjects()
         {
             Cell cell = CurrentCell;
@@ -892,6 +899,7 @@ namespace Server.Models
                 MapObject ob = CurrentCell.Objects[i];
                 if (Dead) break;
                 if (ob.Race != ObjectType.Spell) continue;
+                if (ob == this) continue;
 
                 ((SpellObject)ob).ProcessSpell(this);
 
@@ -912,6 +920,7 @@ namespace Server.Models
 
             Teleport(CurrentMap, cells[SEnvir.Random.Next(cells.Count)].Location);
         }
+
         public bool Teleport(MapRegion region, InstanceInfo instance, byte instanceSequence, bool leaveEffect = true)
         {
             Map map = SEnvir.GetMap(region.Map, instance, instanceSequence);
@@ -925,6 +934,7 @@ namespace Server.Models
 
             return Teleport(map, point, leaveEffect);
         }
+
         public virtual bool Teleport(Map map, Point location, bool leaveEffect = true, bool enterEffect = true)
         {
             if (Race == ObjectType.Player && map.Info.MinimumLevel > Level && !((PlayerObject)this).Character.Account.TempAdmin) return false;
@@ -937,6 +947,8 @@ namespace Server.Models
             if (leaveEffect)
                 Broadcast(new S.ObjectEffect { ObjectID = ObjectID, Effect = Effect.TeleportOut });
 
+            BuffRemove(BuffType.Dash);
+
             CurrentCell = cell.GetMovement(this);
             RemoveAllObjects();
             AddAllObjects();
@@ -948,6 +960,7 @@ namespace Server.Models
 
             return true;
         }
+
         public virtual void AddAllObjects()
         {
             foreach (PlayerObject ob in CurrentMap.Players)
@@ -1090,6 +1103,8 @@ namespace Server.Models
             if (Node == null)
                 throw new InvalidOperationException("Node is null, Object already Despawned");
 
+            OnBeforeDespawned();
+
             CurrentMap = null;
             CurrentCell = null;
 
@@ -1107,24 +1122,6 @@ namespace Server.Models
             }
 
             OnDespawned();
-
-            CleanUp();
-        }
-
-        public void SafeDespawn()
-        {
-            CurrentMap = null;
-            CurrentCell = null;
-
-            RemoveAllObjects();
-
-            if (Node != null)
-            {
-                Node.List.Remove(Node);
-                Node = null;
-            }
-
-            OnSafeDespawn();
 
             CleanUp();
         }
@@ -1147,16 +1144,18 @@ namespace Server.Models
 
             GroupMembers?.Clear();
         }
+
+        public virtual void OnBeforeDespawned()
+        {
+
+        }
+
         public virtual void OnDespawned()
         {
             for (int i = SpellList.Count - 1; i >= 0; i--)
                 SpellList[i].Despawn();
         }
-        public virtual void OnSafeDespawn()
-        {
-            for (int i = SpellList.Count - 1; i >= 0; i--)
-                SpellList[i].Despawn();
-        }
+
         public virtual void RefreshStats() { }
 
         public virtual Cell GetDropLocation(int distance, PlayerObject player)
@@ -1214,7 +1213,7 @@ namespace Server.Models
                 }
             }
 
-            if (bestCell == null || layers >= Config.DropLayers) 
+            if (bestCell == null || layers >= Config.DropLayers)
                 return null;
 
             return bestCell;
@@ -1400,7 +1399,7 @@ namespace Server.Models
             return result;
         }
 
-        public virtual BuffInfo BuffAdd(BuffType type, TimeSpan remainingTicks, Stats stats, bool visible, bool pause, TimeSpan tickRate)
+        public virtual BuffInfo BuffAdd(BuffType type, TimeSpan remainingTicks, Stats stats, bool visible, bool pause, TimeSpan tickRate, bool hidden = false, int extra = 0)
         {
             BuffRemove(type);
 
@@ -1410,6 +1409,7 @@ namespace Server.Models
 
             info.Type = type;
             info.Visible = visible;
+            info.Extra = extra;
 
             info.RemainingTime = remainingTicks;
             info.TickFrequency = tickRate;
@@ -1483,7 +1483,7 @@ namespace Server.Models
 
             if (!info.Visible) return info;
 
-            Broadcast(new S.ObjectBuffAdd { ObjectID = ObjectID, Type = type });
+            Broadcast(new S.ObjectBuffAdd { ObjectID = ObjectID, Type = type, Extra = extra });
 
             return info;
         }
@@ -1558,6 +1558,7 @@ namespace Server.Models
             if (info != null)
                 BuffRemove(info);
         }
+
         public virtual int Attacked(MapObject attacker, int power, Element element, bool canReflect = true, bool ignoreShield = false, bool canCrit = true, bool canStruck = true) { return 0; }
 
         public List<MapObject> GetTargets(Map map, Point location, int radius)
@@ -1689,6 +1690,7 @@ namespace Server.Models
             foreach (PlayerObject player in SeenByPlayers)
                 player.Enqueue(p);
         }
+
         public virtual int Pushed(MirDirection direction, int distance)
         {
             int count = 0;
@@ -1852,7 +1854,7 @@ namespace Server.Models
         public TimeSpan TickFrequency;
         public int TickCount;
         public DateTime TickTime;
-        public object Extra, Extra1;
+        public object Extra, Extra1, Extra2;
         public bool CanKill;
     }
 }

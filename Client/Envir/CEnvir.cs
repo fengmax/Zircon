@@ -1,13 +1,6 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using Client.Controls;
+﻿using Client.Controls;
+using Client.Extensions;
+using Client.Envir.Translations;
 using Client.Models;
 using Client.Scenes;
 using Client.Scenes.Views;
@@ -16,15 +9,18 @@ using Library;
 using Library.Network;
 using Library.SystemModels;
 using MirDB;
-using SlimDX.Direct3D9;
-using System.IO.IsolatedStorage;
-using System.Security;
-using System.Security.Policy;
-using System.Security.Permissions;
-using System.Security.Cryptography.X509Certificates;
-using Client.Envir.Translations;
 using Sentry;
+using SharpDX.Direct3D9;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using System.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
 
 namespace Client.Envir
 {
@@ -307,7 +303,7 @@ namespace Client.Envir
                     return;
                 }
 
-                DXManager.Device.Clear(ClearFlags.Target, Color.Black, 1, 0);
+                DXManager.Device.Clear(ClearFlags.Target, System.Drawing.Color.Black, 1f, 0);
                 DXManager.Device.BeginScene();
                 DXManager.Sprite.Begin(SpriteFlags.AlphaBlend);
 
@@ -319,7 +315,7 @@ namespace Client.Envir
                 DXManager.Device.Present();
                 FPSCounter++;
             }
-            catch (Direct3D9Exception)
+            catch (SharpDX.SharpDXException)
             {
                 DXManager.DeviceLost = true;
             }
@@ -337,7 +333,7 @@ namespace Client.Envir
 
             DXControl.ActiveScene.Dispose();
             DXSoundManager.StopAllSounds();
-            DXControl.ActiveScene = new LoginScene(Config.IntroSceneSize);
+            DXControl.ActiveScene = new LoginScene(Config.ExtendedLogin ? Config.GameSize : Config.IntroSceneSize);
 
             BlockList = new List<ClientBlockInfo>();
         }
@@ -373,6 +369,8 @@ namespace Client.Envir
                     Globals.CompanionLevelInfoList = Session.GetCollection<CompanionLevelInfo>();
                     Globals.DisciplineInfoList = Session.GetCollection<DisciplineInfo>();
                     Globals.FameInfoList = Session.GetCollection<FameInfo>();
+                    Globals.BundleInfoList = Session.GetCollection<BundleInfo>();
+                    Globals.LootBoxInfoList = Session.GetCollection<LootBoxInfo>();
 
                     KeyBinds = Session.GetCollection<KeyBindInfo>();
                     WindowSettings = Session.GetCollection<WindowSetting>();
