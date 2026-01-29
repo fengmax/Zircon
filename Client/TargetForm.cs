@@ -1,6 +1,7 @@
 ﻿using Client.Controls;
 using Client.Envir;
 using Client.Models;
+using Client.Rendering;
 using Client.Scenes;
 using Library;
 using SharpDX.Windows;
@@ -31,6 +32,21 @@ namespace Client
             FormBorderStyle = (Config.FullScreen || Config.Borderless) ? FormBorderStyle.None : FormBorderStyle.FixedSingle;
 
             MaximizeBox = false;
+        }
+
+        protected override bool IsInputKey(Keys keyData)
+        {
+            if ((keyData & Keys.F10) == Keys.F10)
+            {
+                return true;
+            }
+
+            if ((keyData & Keys.Alt) == Keys.Alt)
+            {
+                return true;
+            }
+
+            return base.IsInputKey(keyData);
         }
 
         protected override void OnDeactivate(EventArgs e)
@@ -145,7 +161,7 @@ namespace Client
             {
                 if (e.Alt && e.KeyCode == Keys.Enter)
                 {
-                    DXManager.ToggleFullScreen();
+                    RenderingPipelineManager.ToggleFullScreen();
                     return;
                 }
 

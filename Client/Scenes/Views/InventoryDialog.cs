@@ -20,9 +20,7 @@ namespace Client.Scenes.Views
         public DXItemGrid Grid;
 
         public DXLabel TitleLabel, PrimaryCurrencyLabel, SecondaryCurrencyLabel, WeightLabel, WalletLabel, PrimaryCurrencyTitle, SecondaryCurrencyTitle;
-        public DXButton CloseButton, SortButton, TrashButton;
-
-        public DXButton SellButton;
+        public DXButton CloseButton, SortButton, TrashButton, SellButton;
 
         public List<DXItemCell> SelectedItems = new();
 
@@ -178,6 +176,7 @@ namespace Client.Scenes.Views
             Index = 130;
             Movable = true;
             Sort = true;
+            DropShadow = true;
 
             CloseButton = new DXButton
             {

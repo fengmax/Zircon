@@ -103,6 +103,7 @@ namespace Client.Scenes.Views
             Index = 214;
             Movable = true;
             Sort = true;
+            DropShadow = true;
 
             CloseButton = new DXButton
             {
@@ -398,7 +399,6 @@ namespace Client.Scenes.Views
             get => _SelectedQuest;
             set
             {
-
                 QuestTreeEntry oldValue = _SelectedQuest;
                 _SelectedQuest = value;
 
@@ -510,7 +510,7 @@ namespace Client.Scenes.Views
             EndLabel.Text = SelectedQuest.QuestInfo.FinishNPC.RegionName;
             StartLabel.Text = SelectedQuest.QuestInfo.StartNPC.RegionName;
 
-            SelectedQuestChanged?.Invoke(this, EventArgs.Empty);
+            //SelectedQuestChanged?.Invoke(this, EventArgs.Empty);
         }
 
         #endregion
@@ -722,6 +722,7 @@ namespace Client.Scenes.Views
                 GameScene.Game.BigMapBox.Visible = true;
                 GameScene.Game.BigMapBox.Opacity = 1F;
                 GameScene.Game.BigMapBox.SelectedInfo = SelectedQuest.QuestInfo.StartNPC.Region.Map;
+                GameScene.Game.BigMapBox.PlayLocatorAnim(SelectedQuest.QuestInfo.StartNPC.Index);
             };
 
             label = new DXLabel
@@ -750,6 +751,7 @@ namespace Client.Scenes.Views
                 GameScene.Game.BigMapBox.Visible = true;
                 GameScene.Game.BigMapBox.Opacity = 1F;
                 GameScene.Game.BigMapBox.SelectedInfo = SelectedQuest.QuestInfo.FinishNPC.Region.Map;
+                GameScene.Game.BigMapBox.PlayLocatorAnim(SelectedQuest.QuestInfo.FinishNPC.Index);
             };
 
             AbandonButton = new DXButton

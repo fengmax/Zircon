@@ -1,4 +1,5 @@
-﻿using SharpDX.DirectSound;
+﻿using Client.Rendering;
+using SharpDX.DirectSound;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,7 +8,7 @@ using SharpDXMultimedia = SharpDX.Multimedia;
 
 namespace Client.Envir
 {
-    public sealed class DXSound
+    public sealed class DXSound : ISoundCacheItem
     {
         public string FileName { get; set; }
 
@@ -44,7 +45,7 @@ namespace Client.Envir
                 {
                     using (var mp3 = new NAudioWave.Mp3FileReader(FileName))
                     {
-                        Format = ConvertWaveFormat(mp3.WaveFormat); 
+                        Format = ConvertWaveFormat(mp3.WaveFormat);
 
                         RawData = ReadAllBytes(mp3);
                     }
@@ -57,7 +58,7 @@ namespace Client.Envir
                         RawData = ReadAllBytes(waveReader);
                     }
                 }
-                DXManager.SoundList.Add(this);
+                RenderingPipelineManager.RegisterSoundCache(this);
             }
 
 
@@ -167,7 +168,7 @@ namespace Client.Envir
                 BufferList.RemoveAt(i);
             }
 
-            DXManager.SoundList.Remove(this);
+            RenderingPipelineManager.UnregisterSoundCache(this);
             ExpireTime = DateTime.MinValue;
         }
 

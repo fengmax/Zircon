@@ -147,6 +147,7 @@ namespace Client.Scenes
 
         public MenuDialog MenuBox;
         public DXConfigWindow ConfigBox;
+        public HelpDialog HelpBox;
         public CaptionDialog CaptionBox;
         public InventoryDialog InventoryBox;
         public CharacterDialog CharacterBox;
@@ -347,6 +348,30 @@ namespace Client.Scenes
         }
         private float _DayTime;
 
+        public TimeOfDay TimeOfDay
+        {
+            get => _TimeOfDay;
+            set
+            {
+                if (_TimeOfDay == value) return;
+
+                _TimeOfDay = value;
+            }
+        }
+        private TimeOfDay _TimeOfDay;
+
+        public string TimeOfDayLabel
+        {
+            get => _TimeOfDayLabel;
+            set
+            {
+                if (_TimeOfDayLabel == value) return;
+
+                _TimeOfDayLabel = value;
+            }
+        }
+        private string _TimeOfDayLabel = string.Empty;
+
         public override void OnSizeChanged(Size oValue, Size nValue)
         {
             base.OnSizeChanged(oValue, nValue);
@@ -368,7 +393,9 @@ namespace Client.Scenes
             FishingBox?.LoadSettings();
             GroupBox?.LoadSettings();
             GuildBox?.LoadSettings();
-            MenuBox?.LoadSettings();
+            ConfigBox?.LoadSettings();
+            MenuBox?.LoadSettings();          
+            HelpBox?.LoadSettings();
 
             LoadChatTabs();
         }
@@ -411,7 +438,13 @@ namespace Client.Scenes
                 Parent = this,
                 Visible = false,
                 NetworkTab = { Enabled = false, TabButton = { Visible = false } },
-                ColourTab = { TabButton = { Visible = true } },
+                UITab = { TabButton = { Visible = true } },
+            };
+
+            HelpBox = new HelpDialog
+            {
+                Parent = this,
+                Visible = false
             };
 
             ExitBox = new ExitDialog
@@ -731,6 +764,7 @@ namespace Client.Scenes
             GroupBox.LoadSettings();
             GuildBox.LoadSettings();
             MenuBox.LoadSettings();
+            HelpBox.LoadSettings();
         }
 
         #region Methods
@@ -812,7 +846,7 @@ namespace Client.Scenes
 
             FishingCatchBox.Location = new Point(((Size.Width - FishingCatchBox.Size.Width) / 2), ((Size.Height - FishingCatchBox.Size.Height) / 2) + 200);
 
-            TimerBox.Location = new Point(Size.Width - 120, Size.Height - 180);
+            TimerBox.Location = new Point(MainPanel.DisplayArea.Right - 115, Size.Height - 170);
 
             BundleBox.Location = new Point((Size.Width - BundleBox.Size.Width) / 2, (Size.Height - BundleBox.Size.Height) / 2);
 
@@ -1103,6 +1137,9 @@ namespace Client.Scenes
                     case KeyBindAction.MenuWindow:
                         MenuBox.Visible = !MenuBox.Visible;
                         break;
+                    case KeyBindAction.HelpWindow:
+                        HelpBox.Visible = !HelpBox.Visible;
+                        break;
                     case KeyBindAction.ConfigWindow:
                         ConfigBox.Visible = !ConfigBox.Visible;
                         break;
@@ -1281,6 +1318,7 @@ namespace Client.Scenes
                         break;
                     case KeyBindAction.UseBelt01:
                         if (Observer) continue;
+                        if (e.Shift && Config.ShiftOpenChat) return;
 
                         if (BeltBox.Grid.Grid.Length > 0)
                         {
@@ -4515,6 +4553,14 @@ namespace Client.Scenes
                     ExitBox = null;
                 }
 
+                if (HelpBox != null)
+                {
+                    if (!HelpBox.IsDisposed)
+                        HelpBox.Dispose();
+
+                    HelpBox = null;
+                }
+
                 if (ChatTextBox != null)
                 {
                     if (!ChatTextBox.IsDisposed)
@@ -4650,6 +4696,7 @@ namespace Client.Scenes
 
                     NPCItemFragmentBox = null;
                 }
+
                 if (NPCAccessoryUpgradeBox != null)
                 {
                     if (!NPCAccessoryUpgradeBox.IsDisposed)
@@ -4657,6 +4704,7 @@ namespace Client.Scenes
 
                     NPCAccessoryUpgradeBox = null;
                 }
+
                 if (NPCAccessoryLevelBox != null)
                 {
                     if (!NPCAccessoryLevelBox.IsDisposed)
@@ -4664,6 +4712,7 @@ namespace Client.Scenes
 
                     NPCAccessoryLevelBox = null;
                 }
+
                 if (NPCAccessoryResetBox != null)
                 {
                     if (!NPCAccessoryResetBox.IsDisposed)
@@ -4671,8 +4720,6 @@ namespace Client.Scenes
 
                     NPCAccessoryResetBox = null;
                 }
-
-
 
                 if (MiniMapBox != null)
                 {

@@ -1,6 +1,7 @@
 ﻿using Client.Controls;
 using Client.Envir;
 using Client.Models.Particles;
+using Client.Rendering;
 using Client.Scenes;
 using Client.Scenes.Views;
 using Library;
@@ -10,10 +11,8 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using System.Numerics;
 using System.Windows.Forms;
 using Frame = Library.Frame;
-using Client.Extensions;
 
 namespace Client.Models
 {
@@ -757,7 +756,7 @@ namespace Client.Models
                             break;
 
                         #endregion
-       
+
                         #region Taecheon Sword
 
                         case MagicType.TaecheonSword:
@@ -2786,7 +2785,7 @@ namespace Client.Models
                                         Target = attackTarget,
                                     });
                                     spell.Process();
-                                    
+
                                     DXSoundManager.Play(SoundIndex.FlamingDaggers);
                                 };
 
@@ -5507,35 +5506,44 @@ namespace Client.Models
         {
             if (Dead) return;
 
+            RenderTexture poisonTexture = RenderingPipelineManager.GetPoisonTexture();
+            Size poisonSize = RenderingPipelineManager.GetPoisonTextureSize();
+            Rectangle sourceRectangle = new Rectangle(Point.Empty, poisonSize);
+
             int count = 0;
 
             if ((Poison & PoisonType.Paralysis) == PoisonType.Paralysis)
             {
-                DXManager.Sprite.Draw(DXManager.PoisonTexture, Vector3.Zero, new Vector3(DrawX + count * 5, DrawY - 50, 0), Color.DimGray);
+                RectangleF destination = new RectangleF(DrawX + count * 5, DrawY - 50, poisonSize.Width, poisonSize.Height);
+                RenderingPipelineManager.DrawTexture(poisonTexture, sourceRectangle, destination, Color.DimGray);
                 count++;
             }
 
             if ((Poison & PoisonType.Slow) == PoisonType.Slow)
             {
-                DXManager.Sprite.Draw(DXManager.PoisonTexture, Vector3.Zero, new Vector3(DrawX + count * 5, DrawY - 50, 0), Color.CornflowerBlue);
+                RectangleF destination = new RectangleF(DrawX + count * 5, DrawY - 50, poisonSize.Width, poisonSize.Height);
+                RenderingPipelineManager.DrawTexture(poisonTexture, sourceRectangle, destination, Color.CornflowerBlue);
                 count++;
             }
 
             if ((Poison & PoisonType.Red) == PoisonType.Red)
             {
-                DXManager.Sprite.Draw(DXManager.PoisonTexture, Vector3.Zero, new Vector3(DrawX + count * 5, DrawY - 50, 0), Color.IndianRed);
+                RectangleF destination = new RectangleF(DrawX + count * 5, DrawY - 50, poisonSize.Width, poisonSize.Height);
+                RenderingPipelineManager.DrawTexture(poisonTexture, sourceRectangle, destination, Color.IndianRed);
                 count++;
             }
 
             if ((Poison & PoisonType.Green) == PoisonType.Green)
             {
-                DXManager.Sprite.Draw(DXManager.PoisonTexture, Vector3.Zero, new Vector3(DrawX + count * 5, DrawY - 50, 0), Color.SeaGreen);
+                RectangleF destination = new RectangleF(DrawX + count * 5, DrawY - 50, poisonSize.Width, poisonSize.Height);
+                RenderingPipelineManager.DrawTexture(poisonTexture, sourceRectangle, destination, Color.SeaGreen);
                 count++;
             }
 
             if (Poison.HasFlag(PoisonType.Burn) || Poison.HasFlag(PoisonType.HellFire))
             {
-                DXManager.Sprite.Draw(DXManager.PoisonTexture, Vector3.Zero, new Vector3(DrawX + count * 5, DrawY - 50, 0), Color.OrangeRed);
+                RectangleF destination = new RectangleF(DrawX + count * 5, DrawY - 50, poisonSize.Width, poisonSize.Height);
+                RenderingPipelineManager.DrawTexture(poisonTexture, sourceRectangle, destination, Color.OrangeRed);
             }
         }
 

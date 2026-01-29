@@ -133,10 +133,10 @@ namespace Client.Envir
         public void Process(G.CheckVersion p)
         {
             byte[] clientHash;
-            using (MD5 md5 = MD5.Create())
+            using (SHA256 sha256 = SHA256.Create())
             {
                 using (FileStream stream = File.OpenRead(Path.ChangeExtension(Application.ExecutablePath, ".dll")))
-                    clientHash = md5.ComputeHash(stream);
+                    clientHash = sha256.ComputeHash(stream);
             }
 
             Enqueue(new G.Version { ClientHash = clientHash });
@@ -800,6 +800,11 @@ namespace Client.Envir
         {
             GameScene.Game.DayTime = p.DayTime;
         }
+        public void Process(S.TimeOfDayChanged p)
+        {
+            GameScene.Game.TimeOfDay = p.TimeOfDay;
+            GameScene.Game.TimeOfDayLabel = p.TimeOfDayLabel;
+        }
         public void Process(S.UserLocation p)
         {
             GameScene.Game.Displacement(p.Direction, p.Location);
@@ -1167,7 +1172,7 @@ namespace Client.Envir
                     for (int i = 1; i <= p.Distance; i++)
                         ob.ActionQueue.Add(new ObjectAction(MirAction.Moving, p.Direction, Functions.Move(p.Location, p.Direction, i - p.Distance), 1, p.Magic));
                 }
-                else if(ob == MapObject.User)
+                else if (ob == MapObject.User)
                 {
                     GameScene.Game.CanRun = false;
                 }
@@ -1367,7 +1372,7 @@ namespace Client.Envir
                                 MapTarget = p.CurrentLocation,
                                 Skip = 10,
                                 Direction = p.Direction,
-                                Blend = true,    
+                                Blend = true,
                             });
 
                             spell.CompleteAction = () =>
@@ -4073,7 +4078,11 @@ namespace Client.Envir
         }
         public void Process(S.GuildConquestFinished p)
         {
-            GameScene.Game.ConquestWars.Remove(CEnvir.CastleInfoList.Binding.First(x => x.Index == p.Index));
+            CastleInfo castle = CEnvir.CastleInfoList.Binding.First(x => x.Index == p.Index);
+
+            GameScene.Game.ConquestWars.Remove(castle);
+
+            castle.WarDate = DateTime.MinValue;
 
             foreach (MapObject ob in GameScene.Game.MapControl.Objects)
                 ob.NameChanged();

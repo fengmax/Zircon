@@ -53,7 +53,7 @@ namespace Client.Scenes.Views
             var minHeight = 240;
 
             var maxWidth = 800;
-            var maxHeight = 600;
+            var maxHeight = 600 - 80;
 
             SetClientSize(Image.Size, minWidth, minHeight, maxWidth, maxHeight);
 
@@ -65,13 +65,22 @@ namespace Client.Scenes.Views
             var locationX = (Image.Size.Width - Panel.Size.Width) / 2;
             var locationY = (Image.Size.Height - Panel.Size.Height) / 2;
 
+            Point defaultImageLocation = new Point(-locationX, -locationY);
+
             Image.Location = new Point(-locationX, -locationY);
+
+            RecenterButton.Location = new Point(Size.Width - 30 - 80, Size.Height - 43);
+            RecenterButton.Enabled = SelectedInfo != GameScene.Game.MapControl.MapInfo;
 
             Location = new Point((GameScene.Game.Size.Width - Size.Width) / 2, (GameScene.Game.Size.Height - Size.Height) / 2);
 
             Size size = GetMapSize(SelectedInfo.FileName);
             ScaleX = Image.Size.Width / (float)size.Width;
             ScaleY = Image.Size.Height / (float)size.Height;
+
+            Image.Location = SelectedInfo == GameScene.Game.MapControl.MapInfo
+                ? GetUserCentredImageLocation(defaultImageLocation)
+                : defaultImageLocation;
 
             foreach (NPCInfo ob in Globals.NPCInfoList.Binding)
                 Update(ob);
@@ -81,6 +90,32 @@ namespace Client.Scenes.Views
 
             foreach (ClientObjectData ob in GameScene.Game.DataDictionary.Values)
                 Update(ob);
+        }
+
+        private Point GetUserCentredImageLocation(Point fallbackLocation)
+        {
+            if (Image == null || Panel == null) return fallbackLocation;
+            if (MapObject.User == null) return fallbackLocation;
+            if (SelectedInfo != GameScene.Game.MapControl.MapInfo) return fallbackLocation;
+
+            Point userLocation = MapObject.User.CurrentLocation;
+            Size panelSize = Panel.Size;
+
+            float userPixelX = ScaleX * userLocation.X;
+            float userPixelY = ScaleY * userLocation.Y;
+
+            int targetX = (int)Math.Round(panelSize.Width / 2f - userPixelX);
+            int targetY = (int)Math.Round(panelSize.Height / 2f - userPixelY);
+
+            int minX = Math.Min(0, panelSize.Width - Image.Size.Width);
+            int maxX = Math.Max(0, panelSize.Width - Image.Size.Width);
+            int minY = Math.Min(0, panelSize.Height - Image.Size.Height);
+            int maxY = Math.Max(0, panelSize.Height - Image.Size.Height);
+
+            targetX = Math.Max(minX, Math.Min(maxX, targetX));
+            targetY = Math.Max(minY, Math.Min(maxY, targetY));
+
+            return new Point(targetX, targetY);
         }
 
         public void ToggleOpen(bool open)
@@ -140,6 +175,8 @@ namespace Client.Scenes.Views
         public DXImageControl Image;
         public DXControl Panel;
 
+        public DXButton RecenterButton;
+
         public static float ScaleX, ScaleY;
 
         public Dictionary<object, DXControl> MapInfoObjects = new Dictionary<object, DXControl>();
@@ -159,6 +196,8 @@ namespace Client.Scenes.Views
             base.OnIsVisibleChanged(oValue, nValue);
 
             SelectedInfo = IsVisible ? GameScene.Game.MapControl.MapInfo : null;
+
+            BringToFront();
         }
 
         public override void OnOpacityChanged(float oValue, float nValue)
@@ -187,7 +226,8 @@ namespace Client.Scenes.Views
         public BigMapDialog()
         {
             BackColour = Color.Black;
-            HasFooter = false;
+            DropShadow = true;
+            HasFooter = true;
 
             AllowResize = false;
 
@@ -207,6 +247,20 @@ namespace Client.Scenes.Views
                 Clip = true
             };
             Image.MouseClick += Image_MouseClick;
+
+            RecenterButton = new DXButton
+            {
+                ButtonType = ButtonType.Default,
+                Label = { Text = "Recenter" },
+                Parent = this,
+                Size = new Size(80, DefaultHeight)
+            };
+            RecenterButton.MouseClick += RecenterButton_MouseClick;
+        }
+
+        private void RecenterButton_MouseClick(object sender, MouseEventArgs e)
+        {
+            GameScene.Game.BigMapBox.SelectedInfo = GameScene.Game.MapControl.MapInfo;
         }
 
         private void Image_MouseClick(object sender, MouseEventArgs e)
@@ -227,13 +281,14 @@ namespace Client.Scenes.Views
 
             OnBeforeDraw();
             DrawControl();
+            DrawWindow();
             OnBeforeChildrenDraw();
             DrawChildControls();
-            DrawWindow();
             TitleLabel.Draw();
             DrawBorder();
             OnAfterDraw();
         }
+
         public void Update(NPCInfo ob)
         {
             if (SelectedInfo == null) return;
@@ -318,7 +373,6 @@ namespace Client.Scenes.Views
             int x = (minX + maxX) / 2;
             int y = (minY + maxY) / 2;
 
-
             DXImageControl control;
             MapInfoObjects[ob] = control = new DXImageControl
             {
@@ -354,7 +408,7 @@ namespace Client.Scenes.Views
                 if (ob.ItemInfo != null && ob.ItemInfo.Rarity == Rarity.Common) return;
                 if (ob.MonsterInfo != null && (ob.Dead || ob.MonsterInfo.Image == MonsterImage.None)) return;
 
-                DXMapInfoControl created = CreateMapInfoObject();
+                DXControl created = CreateMapInfoObject();
                 MapInfoObjects[ob] = created;
                 existing = created;
             }
@@ -365,12 +419,12 @@ namespace Client.Scenes.Views
                 return;
             }
 
-            DXMapInfoControl control = existing as DXMapInfoControl;
+            DXControl control = existing as DXControl;
             if (control == null)
             {
                 existing.Dispose();
 
-                DXMapInfoControl created = CreateMapInfoObject();
+                DXControl created = CreateMapInfoObject();
                 MapInfoObjects[ob] = created;
                 control = created;
             }
@@ -449,25 +503,29 @@ namespace Client.Scenes.Views
                     control.BorderColour = Color.Lime;
                     colour = Color.Transparent;
 
-                    if (control.ProcessAction == null)
+                    if (SelectedInfo == GameScene.Game.MapControl.MapInfo)
                     {
-                        control.ProcessAction = () =>
-                        {
-                            if (!control.IsBorderAnimationActive)
-                            {
-                                bool isVisibleSecond = CEnvir.Now.Millisecond < 500;
-
-                                control.Border = true;
-                                control.BorderSize = 1f;
-                                control.BorderColour = isVisibleSecond ? Color.Lime : Color.Transparent;
-                            }
-                            else
-                            {
-                                //control.BackColour = Color.Transparent;
-                                control.BorderSize = 3f;
-                            }
-                        };
+                        RecenterButton.Enabled = false;
                     }
+
+                    var overlay = DXMapInfoControl.GetOverlay(control);
+
+                    control.ProcessAction = () =>
+                    {
+                        if (overlay?.IsBorderAnimationActive == false)
+                        {
+                            bool isVisibleSecond = CEnvir.Now.Millisecond < 500;
+
+                            control.Border = true;
+                            control.BorderSize = 1f;
+                            control.BorderColour = isVisibleSecond ? Color.Lime : Color.Transparent;
+                        }
+                        else
+                        {
+                            control.BorderSize = 3f;
+                            control.BorderColour = colour;
+                        }
+                    };
                 }
                 else if (GameScene.Game.Observer)
                 {
@@ -494,19 +552,25 @@ namespace Client.Scenes.Views
             control.Location = new Point((int)(ScaleX * ob.Location.X) - size.Width / 2, (int)(ScaleY * ob.Location.Y) - size.Height / 2);
         }
 
-        public void PlayLocatorAnim(uint objectID)
+        public void PlayLocatorAnim(long id)
         {
-            if (MapInfoObjects.Keys.OfType<ClientObjectData>().FirstOrDefault(x => x.ObjectID == objectID) is not { } ob)
-                return;
+            if (MapInfoObjects.Keys.OfType<ClientObjectData>().FirstOrDefault(x => x.ObjectID == id) is { } ob)
+            {
+                if (!MapInfoObjects.TryGetValue(ob, out var control))
+                    return;
 
-            if (!MapInfoObjects.TryGetValue(ob, out var control))
-                return;
+                DXMapInfoControl.GetOverlay(control)?.PlayBorderAnimation(Color.Lime);
+            }
+            else if (MapInfoObjects.Keys.OfType<NPCInfo>().FirstOrDefault(x => x.Index == id) is { } npcOb)
+            {
+                if (!MapInfoObjects.TryGetValue(npcOb, out var control))
+                    return;
 
-            if (control is DXMapInfoControl mapInfoObject)
-                mapInfoObject.PlayBorderAnimation();
+                DXMapInfoControl.GetOverlay(control)?.PlayBorderAnimation(Color.Yellow);
+            }
         }
 
-        private DXMapInfoControl CreateMapInfoObject()
+        private DXControl CreateMapInfoObject()
         {
             return new DXMapInfoControl
             {
@@ -567,6 +631,14 @@ namespace Client.Scenes.Views
                         Panel.Dispose();
 
                     Panel = null;
+                }
+
+                if (RecenterButton != null)
+                {
+                    if (!RecenterButton.IsDisposed)
+                        RecenterButton.Dispose();
+
+                    RecenterButton = null;
                 }
             }
         }

@@ -19,6 +19,8 @@ namespace Client.Scenes.Views
         private DXImageControl Image;
         public DXControl Panel;
 
+        public DXImageControl TimeOfDayImage;
+
         public Dictionary<object, DXControl> MapInfoObjects = new Dictionary<object, DXControl>();
 
         public static float ScaleX, ScaleY;
@@ -50,6 +52,11 @@ namespace Client.Scenes.Views
 
             Panel.Location = Area.Location;
             Panel.Size = Area.Size;
+
+            if (Size.Height < HeaderSize)
+            {
+                Size = new Size(Size.Width, HeaderSize);
+            }
 
             UpdateMapPosition();
         }
@@ -84,6 +91,15 @@ namespace Client.Scenes.Views
                 Movable = true,
                 IgnoreMoveBounds = true,
             };
+
+            TimeOfDayImage = new DXImageControl
+            {
+                Parent = this,
+                LibraryFile = LibraryFile.GameInter,
+                Index = 0,
+                HintPosition = HintPosition.Fluid
+            };
+
             GameScene.Game.MapControl.MapInfoChanged += MapControl_MapInfoChanged;
             Image.Moving += Image_Moving;
         }
@@ -237,7 +253,7 @@ namespace Client.Scenes.Views
         {
             if (GameScene.Game.MapControl.MapInfo == null) return;
 
-            if (!MapInfoObjects.TryGetValue(ob, out DXControl existing))
+            if (!MapInfoObjects.TryGetValue(ob, out DXControl control))
             {
                 if (ob.MapIndex != GameScene.Game.MapControl.MapInfo.Index) return;
                 if (ob.ItemInfo != null && ob.ItemInfo.Rarity == Rarity.Common) return;
@@ -245,23 +261,14 @@ namespace Client.Scenes.Views
 
                 DXMapInfoControl created = CreateMapInfoObject();
                 MapInfoObjects[ob] = created;
-                existing = created;
+                control = created;
 
             }
             else if (ob.MapIndex != GameScene.Game.MapControl.MapInfo.Index || (ob.MonsterInfo != null && ob.Dead) || (ob.ItemInfo != null && ob.ItemInfo.Rarity == Rarity.Common))
             {
-                existing.Dispose();
+                control.Dispose();
                 MapInfoObjects.Remove(ob);
                 return;
-            }
-
-            if (existing is not DXMapInfoControl control)
-            {
-                existing.Dispose();
-
-                DXMapInfoControl created = CreateMapInfoObject();
-                MapInfoObjects[ob] = created;
-                control = created;
             }
 
             Size size = new Size(3, 3);
@@ -340,9 +347,11 @@ namespace Client.Scenes.Views
 
                     if (control.ProcessAction == null)
                     {
+                        var overlay = DXMapInfoControl.GetOverlay(control);
+
                         control.ProcessAction = () =>
                         {
-                            if (!control.IsBorderAnimationActive)
+                            if (overlay?.IsBorderAnimationActive == false)
                             {
                                 bool isVisibleSecond = CEnvir.Now.Millisecond < 500;
 
@@ -353,6 +362,7 @@ namespace Client.Scenes.Views
                             else
                             {
                                 control.BorderSize = 3f;
+                                control.BorderColour = colour;
                             }
                         };
                     }
@@ -451,8 +461,7 @@ namespace Client.Scenes.Views
             if (!MapInfoObjects.TryGetValue(ob, out var control))
                 return;
 
-            if (control is DXMapInfoControl mapInfoObject)
-                mapInfoObject.PlayBorderAnimation();
+            DXMapInfoControl.GetOverlay(control)?.PlayBorderAnimation(Color.Lime);
         }
 
         private DXMapInfoControl CreateMapInfoObject()
@@ -484,9 +493,39 @@ namespace Client.Scenes.Views
             DrawChildControls();
             DrawWindow();
             TitleLabel.Draw();
+            DrawTimeOfDay();
             DrawBorder();
             OnAfterDraw();
         }
+
+        private void DrawTimeOfDay()
+        {
+            int index = 0;
+
+            switch (GameScene.Game.TimeOfDay)
+            {
+                case TimeOfDay.Dawn:
+                    index = 215;
+                    break;
+                case TimeOfDay.Day:
+                    index = 216;
+                    break;
+                case TimeOfDay.Dusk:
+                    index = 217;
+                    break;
+                case TimeOfDay.Night:
+                    index = 218;
+                    break;
+            }
+
+            TimeOfDayImage.Index = index;
+            TimeOfDayImage.Location = new Point(3, Size.Height - 28 - 1);
+            TimeOfDayImage.Hint = TimeOfDayLabel;
+            TimeOfDayImage.Draw();
+        }
+
+        private static string TimeOfDayLabel => GameScene.Game.TimeOfDayLabel.Replace("##GAME_TIME##", CEnvir.Now.ToShortTimeString());
+
         #endregion
 
         #region IDisposable
